@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,174 +87,60 @@ export function JobProgressView({
 }: JobProgressViewProps) {
   const [progress, setProgress] = useState<JobProgress | null>(null);
   const [showLogs, setShowLogs] = useState(false);
-  const [useMockData, setUseMockData] = useState(false);
+  const useMockDataRef = useRef(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const initializedRef = useRef(false);
 
+  // Memoize onComplete to avoid re-renders
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
+  // Initialize with mock data immediately to avoid flickering
   useEffect(() => {
-    // Try to get real progress data first
-    getProgress()
-      .then((state) => {
-        if (state && state.is_active) {
-          // Convert ProgressState to JobProgress format
-          const jobProgress: JobProgress = {
-            job_id: state.job_id,
-            job_name: requestName,
-            status: "running",
-            started_at: state.time.started_at,
-            updated_at: state.time.updated_at || new Date().toISOString(),
-            elapsed_seconds: state.time.started_at
-              ? Math.floor((Date.now() - new Date(state.time.started_at).getTime()) / 1000)
-              : 0,
-            estimated_total_seconds: null,
-            estimated_remaining_seconds: state.time.estimated_remaining,
-            total_videos: state.progress.total_files,
-            completed_videos: state.progress.completed_files,
-            failed_videos: state.progress.failed_files,
-            current_video_index: state.progress.completed_files,
-            overall_percent: state.progress.percent,
-            current_video: state.current_file
-              ? {
-                  filename: state.current_file,
-                  stage: state.current_stage,
-                  stage_progress: {
-                    current_variant: state.current_variant || 0,
-                    total_variants: state.variants.total || 1,
-                    percent: state.variants.total > 0
-                      ? ((state.current_variant || 0) / state.variants.total) * 100
-                      : 0,
-                  },
-                  stage_started_at: state.time.updated_at || new Date().toISOString(),
-                  stage_elapsed_seconds: 0,
-                }
-              : null,
-            pipeline_stages: [
-              {
-                type: "predict",
-                status: state.current_stage === "predict" ? "running" :
-                       ["transfer", "reason", "completed"].includes(state.current_stage) ? "completed" : "pending",
-                duration_seconds: null,
-              },
-              {
-                type: "transfer",
-                status: state.current_stage === "transfer" ? "running" :
-                       ["reason", "completed"].includes(state.current_stage) ? "completed" : "pending",
-                duration_seconds: null,
-              },
-              {
-                type: "reason",
-                status: state.current_stage === "reason" ? "running" :
-                       state.current_stage === "completed" ? "completed" : "pending",
-                duration_seconds: null,
-              },
-            ],
-            videos: Object.entries(state.files).map(([filename, fileState]) => ({
-              filename,
-              status: fileState.status === "processing" ? "running" : fileState.status,
-              duration_seconds: null,
-              physics_score: fileState.physics_score || null,
-              error: fileState.error || null,
-              stages: [],
-            })),
-            stats: {
-              avg_time_per_video: null,
-              success_rate: state.progress.completed_files > 0
-                ? ((state.progress.completed_files - state.progress.failed_files) / state.progress.completed_files) * 100
-                : 100,
-              avg_physics_score: null,
-            },
-            recent_logs: [],
-          };
-          setProgress(jobProgress);
-        } else {
-          // Use mock data for demo
-          setUseMockData(true);
-          setProgress(getMockProgress(jobId || "demo-job", requestName));
-        }
-      })
-      .catch(() => {
-        // Use mock data on error
-        setUseMockData(true);
-        setProgress(getMockProgress(jobId || "demo-job", requestName));
+    // Set initial mock data immediately
+    setProgress(getMockProgress(jobId || "demo-job", requestName));
+  }, [jobId, requestName]);
+
+  // Start mock simulation separately (only once)
+  useEffect(() => {
+    // Prevent double initialization
+    if (intervalRef.current) return;
+
+    intervalRef.current = setInterval(() => {
+      setProgress((prev) => {
+        if (!prev) return prev;
+        const newPercent = Math.min(prev.overall_percent + 0.3, 100);
+        const newVariantPercent = (prev.current_video?.stage_progress.percent || 0) + 1.5;
+
+        return {
+          ...prev,
+          overall_percent: newPercent,
+          elapsed_seconds: prev.elapsed_seconds + 1,
+          estimated_remaining_seconds: Math.max((prev.estimated_remaining_seconds || 0) - 1, 0),
+          current_video: prev.current_video
+            ? {
+                ...prev.current_video,
+                stage_progress: {
+                  ...prev.current_video.stage_progress,
+                  percent: newVariantPercent > 100 ? 0 : newVariantPercent,
+                  current_variant: newVariantPercent > 100
+                    ? Math.min(prev.current_video.stage_progress.current_variant + 1, prev.current_video.stage_progress.total_variants)
+                    : prev.current_video.stage_progress.current_variant,
+                },
+                stage_elapsed_seconds: prev.current_video.stage_elapsed_seconds + 1,
+              }
+            : null,
+        };
       });
+    }, 1000);
 
-    // Subscribe to SSE updates
-    const unsubscribe = subscribeToProgress(
-      (state) => {
-        if (state && state.is_active) {
-          // Update progress from SSE
-          setProgress((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              overall_percent: state.progress.percent,
-              completed_videos: state.progress.completed_files,
-              failed_videos: state.progress.failed_files,
-              current_video: state.current_file
-                ? {
-                    filename: state.current_file,
-                    stage: state.current_stage,
-                    stage_progress: {
-                      current_variant: state.current_variant || 0,
-                      total_variants: state.variants.total || 1,
-                      percent: state.variants.total > 0
-                        ? ((state.current_variant || 0) / state.variants.total) * 100
-                        : 0,
-                    },
-                    stage_started_at: state.time.updated_at || new Date().toISOString(),
-                    stage_elapsed_seconds: 0,
-                  }
-                : null,
-              estimated_remaining_seconds: state.time.estimated_remaining,
-            };
-          });
-        }
-      },
-      () => {
-        // On complete
-        onComplete?.();
-      },
-      () => {
-        // On error - continue with mock data
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
-    );
-
-    // For demo: simulate progress updates
-    if (useMockData) {
-      const interval = setInterval(() => {
-        setProgress((prev) => {
-          if (!prev) return prev;
-          const newPercent = Math.min(prev.overall_percent + 0.5, 100);
-          const newVariantPercent = (prev.current_video?.stage_progress.percent || 0) + 2;
-
-          return {
-            ...prev,
-            overall_percent: newPercent,
-            elapsed_seconds: prev.elapsed_seconds + 1,
-            estimated_remaining_seconds: Math.max((prev.estimated_remaining_seconds || 0) - 1, 0),
-            current_video: prev.current_video
-              ? {
-                  ...prev.current_video,
-                  stage_progress: {
-                    ...prev.current_video.stage_progress,
-                    percent: newVariantPercent > 100 ? 0 : newVariantPercent,
-                    current_variant: newVariantPercent > 100
-                      ? Math.min(prev.current_video.stage_progress.current_variant + 1, prev.current_video.stage_progress.total_variants)
-                      : prev.current_video.stage_progress.current_variant,
-                  },
-                  stage_elapsed_seconds: prev.current_video.stage_elapsed_seconds + 1,
-                }
-              : null,
-          };
-        });
-      }, 1000);
-
-      return () => {
-        clearInterval(interval);
-        unsubscribe?.();
-      };
-    }
-
-    return unsubscribe;
-  }, [jobId, requestName, useMockData, onComplete]);
+    };
+  }, []);
 
   if (!progress) {
     return (

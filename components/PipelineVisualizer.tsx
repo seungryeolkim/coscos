@@ -24,6 +24,20 @@ interface PipelineVisualizerProps {
   className?: string;
 }
 
+// Get stage-specific border/bg color classes
+function getStageColors(stageType: PipelineStage): { border: string; bg: string; text: string } {
+  switch (stageType) {
+    case "predict":
+      return { border: "border-cyan-500", bg: "bg-cyan-500/10", text: "text-cyan-500" };
+    case "transfer":
+      return { border: "border-purple-500", bg: "bg-purple-500/10", text: "text-purple-500" };
+    case "reason":
+      return { border: "border-orange-500", bg: "bg-orange-500/10", text: "text-orange-500" };
+    default:
+      return { border: "border-gray-500", bg: "bg-gray-500/10", text: "text-gray-500" };
+  }
+}
+
 export function PipelineVisualizer({
   stages,
   currentVideo,
@@ -52,6 +66,7 @@ export function PipelineVisualizer({
       <div className="flex items-center justify-center gap-2">
         {pipelineStages.map((stage, index) => {
           const config = STAGE_CONFIG[stage.type];
+          const stageColors = getStageColors(stage.type);
           const isActive = stage.status === "running";
           const isCompleted = stage.status === "completed";
           const isSkipped = stage.status === "skipped";
@@ -75,7 +90,7 @@ export function PipelineVisualizer({
                 <div
                   className={`w-24 h-20 rounded-lg border-2 flex flex-col items-center justify-center transition-all ${
                     isActive
-                      ? "border-yellow-500 bg-yellow-500/10 shadow-lg shadow-yellow-500/20"
+                      ? `${stageColors.border} ${stageColors.bg} shadow-lg`
                       : isCompleted
                       ? "border-green-500 bg-green-500/10"
                       : isSkipped
@@ -89,7 +104,7 @@ export function PipelineVisualizer({
                   <span
                     className={`text-xs font-semibold ${
                       isActive
-                        ? "text-yellow-500"
+                        ? stageColors.text
                         : isCompleted
                         ? "text-green-500"
                         : isSkipped
@@ -122,9 +137,9 @@ export function PipelineVisualizer({
                     ) : isCompleted && stage.duration_seconds ? (
                       formatDuration(stage.duration_seconds)
                     ) : isActive ? (
-                      "処理中..."
+                      "처리중..."
                     ) : (
-                      "待機"
+                      "대기"
                     )}
                   </span>
                 </div>
@@ -134,7 +149,11 @@ export function PipelineVisualizer({
                   <div className="w-full mt-2">
                     <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-yellow-500 transition-all duration-300"
+                        className={`h-full transition-all duration-300 ${
+                          stage.type === "predict" ? "bg-cyan-500" :
+                          stage.type === "transfer" ? "bg-purple-500" :
+                          stage.type === "reason" ? "bg-orange-500" : "bg-primary"
+                        }`}
                         style={{ width: `${stageInfo.percent}%` }}
                       />
                     </div>
