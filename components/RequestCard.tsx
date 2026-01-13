@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Request, formatDate, formatDuration, getStatusColor, getScoreColor } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,11 +11,14 @@ interface RequestCardProps {
 }
 
 export function RequestCard({ request }: RequestCardProps) {
+  const tStatus = useTranslations("status");
+  const tCommon = useTranslations("common");
+
   const statusLabels: Record<string, string> = {
-    pending: "Pending",
-    running: "Running",
-    completed: "Completed",
-    failed: "Failed",
+    pending: tStatus("pending"),
+    running: tStatus("running"),
+    completed: tStatus("completed"),
+    failed: tStatus("failed"),
   };
 
   // Collect all variants from all inputs for preview
@@ -42,23 +46,23 @@ export function RequestCard({ request }: RequestCardProps) {
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 {/* Input count */}
                 <span>
-                  {request.totalInputs} input{request.totalInputs !== 1 ? "s" : ""}
+                  {request.totalInputs} {request.totalInputs !== 1 ? tCommon("inputs") : tCommon("input")}
                 </span>
 
                 {/* Variant count */}
                 <span>
-                  {request.totalVariants} variant{request.totalVariants !== 1 ? "s" : ""}
+                  {request.totalVariants} {request.totalVariants !== 1 ? tCommon("variants") : tCommon("variant")}
                 </span>
 
                 {/* Pass/fail count */}
                 {request.status === "completed" && (
                   <>
                     <span className="text-success">
-                      {request.passedCount} passed
+                      {request.passedCount} {tCommon("passed")}
                     </span>
                     {request.failedCount > 0 && (
                       <span className="text-error">
-                        {request.failedCount} failed
+                        {request.failedCount} {tCommon("failed")}
                       </span>
                     )}
                   </>
@@ -75,7 +79,7 @@ export function RequestCard({ request }: RequestCardProps) {
             <div className="flex flex-col items-end gap-1 ml-4">
               {request.status === "completed" && request.avgScore > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Score</span>
+                  <span className="text-sm text-muted-foreground">{tCommon("score")}</span>
                   <span className={`font-mono font-medium ${getScoreColor(request.avgScore)}`}>
                     {request.avgScore.toFixed(2)}
                   </span>
@@ -103,7 +107,7 @@ export function RequestCard({ request }: RequestCardProps) {
                   title={`${variant.styleName}: ${
                     variant.physicsScore != null
                       ? `${variant.physicsScore.toFixed(2)} - ${variant.isValid ? "Pass" : "Fail"}`
-                      : "Processing"
+                      : tCommon("processing")
                   }`}
                 />
               ))}

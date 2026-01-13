@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { RequestCard } from "@/components/RequestCard";
 import { ProgressMonitor } from "@/components/ProgressMonitor";
 import { listRequests, checkAPIHealth } from "@/lib/api";
@@ -16,6 +17,9 @@ import {
 } from "@/components/ui/select";
 
 export default function HomePage() {
+  const t = useTranslations("home");
+  const tStatus = useTranslations("status");
+
   const [requests, setRequests] = useState<Request[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
@@ -36,19 +40,19 @@ export default function HomePage() {
           setRequests(response.requests);
         } else {
           setRequests([]);
-          setErrorMessage("API server is not available. Please start the server.");
+          setErrorMessage(t("error"));
         }
       } catch (error) {
         console.error("Failed to fetch requests:", error);
         setRequests([]);
-        setErrorMessage("Failed to fetch requests. Please check API connection.");
+        setErrorMessage(t("error"));
       } finally {
         setIsLoading(false);
       }
     }
 
     fetchData();
-  }, []);
+  }, [t]);
 
   // Filter requests
   const filteredRequests = requests.filter((request) => {
@@ -81,7 +85,7 @@ export default function HomePage() {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold">Requests</h1>
+            <h1 className="text-2xl font-semibold">{t("title")}</h1>
             {!isLoading && (
               <span
                 className={`text-xs px-2 py-0.5 rounded ${
@@ -90,12 +94,12 @@ export default function HomePage() {
                     : "bg-error/10 text-error"
                 }`}
               >
-                {apiConnected ? "API Connected" : "API Disconnected"}
+                {apiConnected ? t("apiConnected") : t("apiDisconnected")}
               </span>
             )}
           </div>
           <Link href="/new">
-            <Button>+ New Request</Button>
+            <Button>+ {t("newRequest")}</Button>
           </Link>
         </div>
         <p className="text-muted-foreground">
@@ -109,15 +113,15 @@ export default function HomePage() {
       {/* Stats cards */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         <div className="bg-card border border-border rounded-lg p-4">
-          <div className="text-sm text-muted-foreground mb-1">Total</div>
+          <div className="text-sm text-muted-foreground mb-1">{t("filter.all")}</div>
           <div className="text-2xl font-semibold">{totalRequests}</div>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <div className="text-sm text-muted-foreground mb-1">Completed</div>
+          <div className="text-sm text-muted-foreground mb-1">{t("filter.completed")}</div>
           <div className="text-2xl font-semibold text-success">{completedRequests}</div>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
-          <div className="text-sm text-muted-foreground mb-1">Running</div>
+          <div className="text-sm text-muted-foreground mb-1">{t("filter.running")}</div>
           <div className="text-2xl font-semibold text-warning">{runningRequests}</div>
         </div>
       </div>
@@ -133,11 +137,11 @@ export default function HomePage() {
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="running">Running</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
+            <SelectItem value="all">{t("filter.all")}</SelectItem>
+            <SelectItem value="completed">{tStatus("completed")}</SelectItem>
+            <SelectItem value="running">{tStatus("running")}</SelectItem>
+            <SelectItem value="pending">{tStatus("pending")}</SelectItem>
+            <SelectItem value="failed">{tStatus("failed")}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -172,7 +176,7 @@ export default function HomePage() {
         <div className="flex items-center justify-center py-12">
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-muted-foreground border-t-foreground rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground">Loading requests...</span>
+            <span className="text-sm text-muted-foreground">{t("loading")}</span>
           </div>
         </div>
       ) : (
@@ -191,7 +195,7 @@ export default function HomePage() {
                 </>
               ) : (
                 <>
-                  <p>No requests found</p>
+                  <p>{t("empty")}</p>
                   {(statusFilter !== "all" || searchQuery) && (
                     <p className="text-sm mt-1">Try adjusting your filters</p>
                   )}

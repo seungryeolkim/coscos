@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -22,6 +23,7 @@ export function ProgressMonitor({
   useSSE = true,
   compact = false,
 }: ProgressMonitorProps) {
+  const t = useTranslations("progress");
   const [progress, setProgress] = useState<ProgressState | null>(null);
 
   useEffect(() => {
@@ -97,7 +99,7 @@ export function ProgressMonitor({
             {/* ETA */}
             {progress.time.estimated_remaining && (
               <p className="text-xs text-muted-foreground mt-1">
-                남은 시간: ~{formatDuration(progress.time.estimated_remaining)}
+                {t("remainingTime")}: ~{formatDuration(progress.time.estimated_remaining)}
               </p>
             )}
           </CardContent>
@@ -113,7 +115,7 @@ export function ProgressMonitor({
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            파이프라인 실행 중
+            {t("pipelineRunning")}
           </CardTitle>
           <Badge variant="outline" className={stageConfig.color}>
             {stageConfig.labelKo}
@@ -125,7 +127,7 @@ export function ProgressMonitor({
         {/* Main progress bar */}
         <div className="mb-4">
           <div className="flex justify-between text-sm mb-1">
-            <span>전체 진행률</span>
+            <span>{t("overallProgress")}</span>
             <span>{percent.toFixed(1)}%</span>
           </div>
           <div className="h-3 bg-secondary rounded-full overflow-hidden">
@@ -140,25 +142,25 @@ export function ProgressMonitor({
         <div className="grid grid-cols-4 gap-4 mb-4">
           <div className="text-center">
             <div className="text-2xl font-semibold">{total_files}</div>
-            <div className="text-xs text-muted-foreground">전체</div>
+            <div className="text-xs text-muted-foreground">{t("total")}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-semibold text-green-500">
               {completed_files}
             </div>
-            <div className="text-xs text-muted-foreground">완료</div>
+            <div className="text-xs text-muted-foreground">{t("completed")}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-semibold text-red-500">
               {failed_files}
             </div>
-            <div className="text-xs text-muted-foreground">실패</div>
+            <div className="text-xs text-muted-foreground">{t("failed")}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-semibold text-yellow-500">
               {remaining_files}
             </div>
-            <div className="text-xs text-muted-foreground">남음</div>
+            <div className="text-xs text-muted-foreground">{t("remaining")}</div>
           </div>
         </div>
 
@@ -167,18 +169,18 @@ export function ProgressMonitor({
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium">
-                {progress.current_file || "대기 중..."}
+                {progress.current_file || t("waiting")}
               </p>
               {progress.current_variant !== null &&
                 progress.variants.total > 0 && (
                   <p className="text-sm text-muted-foreground">
-                    변형 {progress.current_variant + 1}/{progress.variants.total}
+                    {t("variant")} {progress.current_variant + 1}/{progress.variants.total}
                   </p>
                 )}
             </div>
             {progress.time.estimated_remaining && (
               <div className="text-right">
-                <p className="text-sm text-muted-foreground">예상 남은 시간</p>
+                <p className="text-sm text-muted-foreground">{t("estimatedRemaining")}</p>
                 <p className="font-mono">
                   {formatDuration(progress.time.estimated_remaining)}
                 </p>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Variant, getScoreColor, formatDuration } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ interface VariantCardProps {
 }
 
 export function VariantCard({ variant, onSelect, isSelected }: VariantCardProps) {
+  const t = useTranslations("variant");
   const hasOutput = !!variant.outputPath;
   const hasScore = variant.physicsScore != null;
 
@@ -49,7 +51,7 @@ export function VariantCard({ variant, onSelect, isSelected }: VariantCardProps)
                 variant.isValid ? "text-success border-success/30" : "text-error border-error/30"
               }`}
             >
-              {variant.isValid ? "Pass" : "Fail"}
+              {variant.isValid ? t("pass") : t("fail")}
             </Badge>
           )}
         </div>
@@ -57,7 +59,7 @@ export function VariantCard({ variant, onSelect, isSelected }: VariantCardProps)
         {/* Physics score */}
         {hasScore && (
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs text-muted-foreground">Score</span>
+            <span className="text-xs text-muted-foreground">{t("score")}</span>
             <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all ${
@@ -76,10 +78,10 @@ export function VariantCard({ variant, onSelect, isSelected }: VariantCardProps)
         {(variant.transferDuration || variant.reasonDuration) && (
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             {variant.transferDuration && (
-              <span>Transfer: {formatDuration(variant.transferDuration)}</span>
+              <span>{t("transfer")}: {formatDuration(variant.transferDuration)}</span>
             )}
             {variant.reasonDuration && (
-              <span>Reason: {formatDuration(variant.reasonDuration)}</span>
+              <span>{t("reason")}: {formatDuration(variant.reasonDuration)}</span>
             )}
           </div>
         )}
@@ -107,10 +109,12 @@ export function VariantGrid({
   selectedVariant,
   onSelectVariant,
 }: VariantGridProps) {
+  const t = useTranslations("variant");
+
   if (variants.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        No variants generated yet
+        {t("noVariants")}
       </div>
     );
   }

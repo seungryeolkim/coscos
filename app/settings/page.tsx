@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import {
   Card,
   CardContent,
@@ -89,6 +90,13 @@ const saveCustomProfiles = (profiles: WorkflowProfile[]) => {
 };
 
 export default function SettingsPage() {
+  const t = useTranslations("settings");
+  const tApi = useTranslations("settings.api");
+  const tOutput = useTranslations("settings.output");
+  const tDefaults = useTranslations("settings.defaults");
+  const tProfiles = useTranslations("settings.profiles");
+  const tStyles = useTranslations("settings.styles");
+
   // API connection state
   const [apiConnected, setApiConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -413,7 +421,7 @@ export default function SettingsPage() {
       {/* Page Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <h1 className="text-2xl font-semibold">Settings</h1>
+          <h1 className="text-2xl font-semibold">{t("title")}</h1>
           {!isLoading && (
             <span
               className={`text-xs px-2 py-0.5 rounded ${
@@ -422,23 +430,23 @@ export default function SettingsPage() {
                   : "bg-muted text-muted-foreground"
               }`}
             >
-              {apiConnected ? "API Connected" : "API Offline"}
+              {apiConnected ? t("apiConnected") : t("apiOffline")}
             </span>
           )}
         </div>
         <p className="text-muted-foreground">
-          Configure API connections, output options, and default parameters
+          {t("subtitle")}
         </p>
       </div>
 
       {/* Tab Navigation */}
       <div className="flex gap-1 p-1 bg-muted rounded-lg mb-6 overflow-x-auto">
         {[
-          { id: "api", label: "API" },
-          { id: "output", label: "Output" },
-          { id: "defaults", label: "Defaults" },
-          { id: "profiles", label: "Profiles" },
-          { id: "styles", label: "Styles" },
+          { id: "api", label: t("tabs.api") },
+          { id: "output", label: t("tabs.output") },
+          { id: "defaults", label: t("tabs.defaults") },
+          { id: "profiles", label: t("tabs.profiles") },
+          { id: "styles", label: t("tabs.styles") },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1429,10 +1437,10 @@ export default function SettingsPage() {
         </div>
         <div className="flex gap-4">
           <Button variant="outline" onClick={() => window.location.reload()}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button onClick={handleSave} disabled={isSaving || !apiConnected}>
-            {isSaving ? "Saving..." : "Save Settings"}
+            {isSaving ? t("saving") : t("save")}
           </Button>
         </div>
       </div>

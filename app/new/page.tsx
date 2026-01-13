@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,6 +18,9 @@ import { browseDirectory, createJob, createWorkflowJob, checkAPIHealth, getJob }
 
 export default function NewJobPage() {
   const router = useRouter();
+  const t = useTranslations("new");
+  const tHome = useTranslations("home");
+  const tStatus = useTranslations("status");
 
   // State
   const [apiConnected, setApiConnected] = useState(false);
@@ -153,16 +157,16 @@ export default function NewJobPage() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-semibold">New Request</h1>
+          <h1 className="text-2xl font-semibold">{t("title")}</h1>
           <span
             className={`text-xs px-2 py-0.5 rounded ${
               apiConnected ? "bg-success/10 text-success" : "bg-error/10 text-error"
             }`}
           >
-            {apiConnected ? "API Connected" : "API Disconnected"}
+            {apiConnected ? tHome("apiConnected") : tHome("apiDisconnected")}
           </span>
         </div>
-        <p className="text-muted-foreground">Build your custom Cosmos pipeline</p>
+        <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       {/* Job Status / Progress Monitor */}
@@ -205,8 +209,8 @@ export default function NewJobPage() {
                   <div>
                     <h3 className="font-medium">{jobInfo.name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      Request ID: {jobInfo.id} • Mode: {jobInfo.mode} •{" "}
-                      {jobInfo.video_count} video(s)
+                      {t("requestId")}: {jobInfo.id} • {t("mode")}: {jobInfo.mode} •{" "}
+                      {jobInfo.video_count} {t("videos")}
                     </p>
                   </div>
                 </div>
@@ -238,7 +242,7 @@ export default function NewJobPage() {
 
           <div className="mt-4 flex gap-2">
             <Button variant="outline" onClick={() => router.push("/")}>
-              View All Requests
+              {t("viewAllRequests")}
             </Button>
             <Button
               variant="ghost"
@@ -248,7 +252,7 @@ export default function NewJobPage() {
                 setWorkflowStages([]);
               }}
             >
-              Create Another Request
+              {t("createAnother")}
             </Button>
           </div>
         </div>
@@ -266,7 +270,7 @@ export default function NewJobPage() {
 
           {/* Section 1: File Browser */}
           <section className="bg-card border border-border rounded-lg p-6">
-            <h2 className="text-lg font-medium mb-4">1. Select Videos</h2>
+            <h2 className="text-lg font-medium mb-4">{t("selectVideos")}</h2>
             <div className="flex gap-2 mb-4">
               <Input
                 type="text"
@@ -277,7 +281,7 @@ export default function NewJobPage() {
                 onKeyDown={(e) => e.key === "Enter" && handleBrowse()}
               />
               <Button onClick={handleBrowse} disabled={isLoading}>
-                {isLoading ? "Loading..." : "Browse"}
+                {isLoading ? t("loading") : t("browse")}
               </Button>
             </div>
 
@@ -289,10 +293,10 @@ export default function NewJobPage() {
                   </span>
                   <div className="flex gap-2">
                     <Button variant="ghost" size="sm" onClick={selectAll}>
-                      Select All
+                      {t("selectAll")}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={deselectAll}>
-                      Deselect
+                      {t("deselect")}
                     </Button>
                   </div>
                 </div>
@@ -318,31 +322,31 @@ export default function NewJobPage() {
 
             {videos.length === 0 && !isLoading && (
               <div className="text-center py-6 text-muted-foreground text-sm">
-                Enter a directory path and click Browse
+                {t("enterDirectory")}
               </div>
             )}
           </section>
 
           {/* Section 2: Workflow Builder */}
           <section className="bg-card border border-border rounded-lg p-6">
-            <h2 className="text-lg font-medium mb-4">2. Build Workflow</h2>
+            <h2 className="text-lg font-medium mb-4">{t("buildWorkflow")}</h2>
             <WorkflowBuilder stages={workflowStages} onStagesChange={setWorkflowStages} />
           </section>
 
           {/* Section 3: Request Settings */}
           <section className="bg-card border border-border rounded-lg p-6">
-            <h2 className="text-lg font-medium mb-4">3. Request Settings</h2>
+            <h2 className="text-lg font-medium mb-4">{t("requestSettings")}</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium mb-1 block">Request Name (optional)</label>
+                <label className="text-sm font-medium mb-1 block">{t("requestName")}</label>
                 <Input
                   value={jobName}
                   onChange={(e) => setJobName(e.target.value)}
-                  placeholder="Auto-generated if empty"
+                  placeholder={t("autoGenerated")}
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">Selected Videos</label>
+                <label className="text-sm font-medium mb-1 block">{t("selectedVideos")}</label>
                 <div className="h-10 flex items-center text-sm text-muted-foreground">
                   {selectedVideos.size} video{selectedVideos.size !== 1 ? "s" : ""} selected
                 </div>
@@ -353,7 +357,7 @@ export default function NewJobPage() {
           {/* Submit */}
           <div className="flex justify-end gap-4">
             <Button variant="outline" onClick={() => router.push("/")}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button
               onClick={handleSubmit}
@@ -364,7 +368,7 @@ export default function NewJobPage() {
               }
               className="min-w-[140px]"
             >
-              {isSubmitting ? "Creating..." : "Run Pipeline"}
+              {isSubmitting ? t("creating") : t("runPipeline")}
             </Button>
           </div>
         </div>

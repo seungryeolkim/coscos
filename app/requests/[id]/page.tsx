@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { getRequest } from "@/lib/api";
 import {
   Request,
@@ -29,6 +30,9 @@ import { JobProgressView } from "@/components/JobProgressView";
 export default function RequestDetailPage() {
   const params = useParams();
   const requestId = params.id as string;
+  const t = useTranslations("detail");
+  const tStatus = useTranslations("status");
+  const tCommon = useTranslations("common");
 
   const [request, setRequest] = useState<Request | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,18 +50,18 @@ export default function RequestDetailPage() {
         if (response.request) {
           setRequest(response.request);
         } else {
-          setError("Request not found");
+          setError(t("notFound"));
         }
       } catch (err) {
         console.error("Failed to fetch request:", err);
-        setError("Failed to load request data. Please check API connection.");
+        setError(t("checkApi"));
       } finally {
         setIsLoading(false);
       }
     }
 
     fetchData();
-  }, [requestId]);
+  }, [requestId, t]);
 
   // Get selected input (default to first if none selected)
   const selectedInput = useMemo(() => {
@@ -73,7 +77,7 @@ export default function RequestDetailPage() {
       <div className="flex items-center justify-center h-screen">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-muted-foreground border-t-foreground rounded-full animate-spin" />
-          <span className="text-sm text-muted-foreground">Loading request...</span>
+          <span className="text-sm text-muted-foreground">{t("loading")}</span>
         </div>
       </div>
     );
@@ -84,15 +88,13 @@ export default function RequestDetailPage() {
       <div className="container mx-auto px-6 py-8">
         <div className="text-center py-12">
           <h1 className="text-xl font-semibold mb-2">
-            {error || "Request not found"}
+            {error || t("notFound")}
           </h1>
           <p className="text-muted-foreground mb-4">
-            {error
-              ? "Please check your API connection and try again."
-              : "The request you're looking for doesn't exist."}
+            {error ? t("checkApi") : t("doesntExist")}
           </p>
           <Link href="/">
-            <Button variant="outline">Back to Requests</Button>
+            <Button variant="outline">{t("backToRequests")}</Button>
           </Link>
         </div>
       </div>
@@ -100,10 +102,10 @@ export default function RequestDetailPage() {
   }
 
   const statusLabels: Record<string, string> = {
-    pending: "Pending",
-    running: "Running",
-    completed: "Completed",
-    failed: "Failed",
+    pending: tStatus("pending"),
+    running: tStatus("running"),
+    completed: tStatus("completed"),
+    failed: tStatus("failed"),
   };
 
   const handleCompare = (variant: Variant) => {
@@ -124,7 +126,7 @@ export default function RequestDetailPage() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Back to Requests
+              {t("backToRequests")}
             </Link>
 
             <div className="flex items-center gap-3">
@@ -139,9 +141,9 @@ export default function RequestDetailPage() {
 
             <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
               <span>{formatDate(request.createdAt)}</span>
-              {request.totalDuration && <span>Duration: {formatDuration(request.totalDuration)}</span>}
-              <span>{request.totalInputs} inputs</span>
-              <span>{request.totalVariants} variants</span>
+              {request.totalDuration && <span>{t("duration")}: {formatDuration(request.totalDuration)}</span>}
+              <span>{request.totalInputs} {t("inputs")}</span>
+              <span>{request.totalVariants} {t("variants")}</span>
             </div>
           </div>
 
@@ -149,13 +151,13 @@ export default function RequestDetailPage() {
           {request.status === "completed" && (
             <div className="flex items-center gap-6">
               <div className="text-right">
-                <div className="text-sm text-muted-foreground">Avg Score</div>
+                <div className="text-sm text-muted-foreground">{t("avgScore")}</div>
                 <div className={`text-xl font-mono font-semibold ${getScoreColor(request.avgScore)}`}>
                   {request.avgScore.toFixed(2)}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-sm text-muted-foreground">Pass Rate</div>
+                <div className="text-sm text-muted-foreground">{t("passRate")}</div>
                 <div className="text-xl font-semibold">
                   {request.passedCount}/{request.totalVariants}
                 </div>
@@ -184,7 +186,7 @@ export default function RequestDetailPage() {
           {/* Left sidebar - Input list (independent scroll) */}
           <div className="w-72 border-r border-border overflow-y-auto overscroll-contain shrink-0">
             <div className="p-4">
-              <h2 className="text-sm font-medium text-muted-foreground mb-3">Input Videos</h2>
+              <h2 className="text-sm font-medium text-muted-foreground mb-3">{t("inputVideos")}</h2>
               <div className="space-y-2">
                 {request.inputs.map((input) => (
                   <InputListItem
@@ -208,7 +210,7 @@ export default function RequestDetailPage() {
               />
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
-                Select an input from the list
+                {t("selectInput")}
               </div>
             )}
           </div>
@@ -221,14 +223,14 @@ export default function RequestDetailPage() {
           <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>
-                Compare: {selectedInput.rgbFilename} → {selectedVariant?.styleName}
+                {t("compare")}: {selectedInput.rgbFilename} → {selectedVariant?.styleName}
               </DialogTitle>
             </DialogHeader>
 
             <div className="grid grid-cols-2 gap-6">
               {/* Input */}
               <div>
-                <div className="text-sm text-muted-foreground mb-2">Input</div>
+                <div className="text-sm text-muted-foreground mb-2">{t("input")}</div>
                 <div className="aspect-video bg-black rounded-lg overflow-hidden">
                   <VideoPreview
                     ref={inputVideoRef}
@@ -244,7 +246,7 @@ export default function RequestDetailPage() {
               {/* Output */}
               <div>
                 <div className="text-sm text-muted-foreground mb-2">
-                  Output ({selectedVariant?.styleName})
+                  {t("output")} ({selectedVariant?.styleName})
                 </div>
                 <div className="aspect-video bg-black rounded-lg overflow-hidden">
                   {selectedVariant?.outputPath ? (
@@ -268,7 +270,7 @@ export default function RequestDetailPage() {
               <div className="mt-4 p-4 bg-secondary rounded-lg">
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
-                    <span className="text-muted-foreground">Physics Score: </span>
+                    <span className="text-muted-foreground">{t("physicsScore")}: </span>
                     <span
                       className={`font-mono ${
                         selectedVariant.physicsScore !== undefined
@@ -280,13 +282,13 @@ export default function RequestDetailPage() {
                     </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Status: </span>
+                    <span className="text-muted-foreground">{t("status")}: </span>
                     <span className={selectedVariant.isValid ? "text-success" : "text-error"}>
-                      {selectedVariant.isValid ? "Valid" : "Invalid"}
+                      {selectedVariant.isValid ? t("valid") : t("invalid")}
                     </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Duration: </span>
+                    <span className="text-muted-foreground">{t("duration")}: </span>
                     <span>
                       {selectedVariant.transferDuration
                         ? formatDuration(selectedVariant.transferDuration)
@@ -295,7 +297,7 @@ export default function RequestDetailPage() {
                   </div>
                 </div>
                 <div className="mt-2 text-sm">
-                  <span className="text-muted-foreground">Prompt: </span>
+                  <span className="text-muted-foreground">{t("prompt")}: </span>
                   <span className="font-mono text-xs">{selectedVariant.prompt}</span>
                 </div>
               </div>
@@ -317,6 +319,7 @@ function InputListItem({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const tCommon = useTranslations("common");
   const hasControl = !!input.controlPath;
 
   return (
@@ -338,12 +341,12 @@ function InputListItem({
       </div>
 
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span>{input.variants.length} variants</span>
+        <span>{input.variants.length} {tCommon("variants")}</span>
         {input.passedCount > 0 && (
-          <span className="text-success">{input.passedCount} passed</span>
+          <span className="text-success">{input.passedCount} {tCommon("passed")}</span>
         )}
         {input.failedCount > 0 && (
-          <span className="text-error">{input.failedCount} failed</span>
+          <span className="text-error">{input.failedCount} {tCommon("failed")}</span>
         )}
       </div>
 
@@ -378,18 +381,20 @@ function InputDetailView({
   config: { transferPrompts: string[]; controlWeights: { depth: number; edge: number; seg: number; vis: number }; seed: number; threshold: number };
   onCompare: (variant: Variant) => void;
 }) {
+  const t = useTranslations("detail");
+
   return (
     <div className="space-y-6">
       {/* Input videos */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Input</CardTitle>
+          <CardTitle className="text-lg">{t("input")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* RGB input */}
             <div>
-              <div className="text-sm text-muted-foreground mb-2">RGB Video</div>
+              <div className="text-sm text-muted-foreground mb-2">{t("rgbVideo")}</div>
               <div className="aspect-video">
                 <VideoPreview src={input.rgbPath} title="Original" autoPlayOnVisible={true} className="w-full h-full" />
               </div>
@@ -417,11 +422,11 @@ function InputDetailView({
               </div>
             ) : (
               <div>
-                <div className="text-sm text-muted-foreground mb-2">Control Input</div>
+                <div className="text-sm text-muted-foreground mb-2">{t("controlInput")}</div>
                 <div className="aspect-video">
-                  <VideoPlaceholder title="No control input" className="w-full h-full" />
+                  <VideoPlaceholder title={t("noControlInput")} className="w-full h-full" />
                 </div>
-                <div className="mt-2 text-xs text-muted-foreground">RGB only</div>
+                <div className="mt-2 text-xs text-muted-foreground">{t("rgbOnly")}</div>
               </div>
             )}
           </div>
@@ -432,9 +437,9 @@ function InputDetailView({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Output Variants</CardTitle>
+            <CardTitle className="text-lg">{t("outputVariants")}</CardTitle>
             <div className="text-sm text-muted-foreground">
-              {input.passedCount} passed / {input.variants.length} total
+              {input.passedCount} {t("passed")} / {input.variants.length} {t("total")}
             </div>
           </div>
         </CardHeader>
@@ -443,7 +448,7 @@ function InputDetailView({
             <VariantGrid variants={input.variants} onSelectVariant={onCompare} />
           ) : (
             <div className="text-center py-8 text-muted-foreground">
-              No variants generated yet
+              {t("noVariants")}
             </div>
           )}
         </CardContent>
@@ -452,30 +457,30 @@ function InputDetailView({
       {/* Configuration */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Configuration</CardTitle>
+          <CardTitle className="text-lg">{t("configuration")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div>
-              <div className="text-sm text-muted-foreground">Seed</div>
+              <div className="text-sm text-muted-foreground">{t("seed")}</div>
               <div className="font-mono">{config.seed}</div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">Threshold</div>
+              <div className="text-sm text-muted-foreground">{t("threshold")}</div>
               <div className="font-mono">{config.threshold}</div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">Depth Weight</div>
+              <div className="text-sm text-muted-foreground">{t("depthWeight")}</div>
               <div className="font-mono">{config.controlWeights.depth}</div>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">Edge Weight</div>
+              <div className="text-sm text-muted-foreground">{t("edgeWeight")}</div>
               <div className="font-mono">{config.controlWeights.edge}</div>
             </div>
           </div>
 
           <div>
-            <div className="text-sm text-muted-foreground mb-2">Prompts</div>
+            <div className="text-sm text-muted-foreground mb-2">{t("prompts")}</div>
             <div className="space-y-2">
               {config.transferPrompts.map((prompt, idx) => (
                 <div
