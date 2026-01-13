@@ -13,7 +13,7 @@ import {
   validateWorkflow,
   JobInfo,
 } from "@/lib/types";
-import { browseDirectory, createJob, checkAPIHealth, getJob } from "@/lib/api";
+import { browseDirectory, createJob, createWorkflowJob, checkAPIHealth, getJob } from "@/lib/api";
 
 export default function NewJobPage() {
   const router = useRouter();
@@ -25,7 +25,7 @@ export default function NewJobPage() {
   const [error, setError] = useState<string | null>(null);
 
   // File browser state
-  const [directoryPath, setDirectoryPath] = useState("~/cosmosqzb/input");
+  const [directoryPath, setDirectoryPath] = useState("~/coscos/input");
   const [videos, setVideos] = useState<VideoFile[]>([]);
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
 
@@ -119,46 +119,20 @@ export default function NewJobPage() {
     setError(null);
 
     try {
-      // Build the job config based on workflow stages
-      // For now, we'll convert to the old format for backward compatibility
-      const firstStage = workflowStages[0];
-      let mode: "predict" | "transfer" | "full" = "transfer";
-
-      if (workflowStages.length === 1 && firstStage.type === "predict") {
-        mode = "predict";
-      } else if (workflowStages.length === 1 && firstStage.type === "transfer") {
-        mode = "transfer";
-      } else {
-        mode = "full";
-      }
-
-      // Extract transfer styles if any transfer stage exists
-      const transferStage = workflowStages.find((s) => s.type === "transfer");
-      const transferConfig = transferStage?.config as any;
-      const transferStyles = transferConfig?.styles || [];
-
-      // Extract reason config if any reason stage exists
-      const reasonStage = workflowStages.find((s) => s.type === "reason");
-      const reasonConfig = reasonStage?.config as any;
-      const threshold = reasonConfig?.threshold || 0.7;
-
-      // Extract seed from predict or transfer stage
-      const predictStage = workflowStages.find((s) => s.type === "predict");
-      const predictConfig = predictStage?.config as any;
-      const seed = predictConfig?.seed || transferConfig?.seed || 42;
-
-      const jobRequest = {
+      // Send workflow format to backend
+      const response = await createWorkflowJob({
         name: jobName || undefined,
         video_paths: Array.from(selectedVideos),
-        config: {
-          mode,
-          transfer_styles: transferStyles,
-          seed,
-          threshold,
+        workflow: {
+          stages: workflowStages.map((stage) => ({
+            id: stage.id,
+            type: stage.type,
+            order: stage.order,
+            config: JSON.parse(JSON.stringify(stage.config)),
+          })),
+          name: jobName || undefined,
         },
-      };
-
-      const response = await createJob(jobRequest);
+      });
       setRunningJobId(response.job.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create job");
@@ -179,7 +153,7 @@ export default function NewJobPage() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-semibold">New Job</h1>
+          <h1 className="text-2xl font-semibold">New Request</h1>
           <span
             className={`text-xs px-2 py-0.5 rounded ${
               apiConnected ? "bg-success/10 text-success" : "bg-error/10 text-error"
@@ -231,7 +205,7 @@ export default function NewJobPage() {
                   <div>
                     <h3 className="font-medium">{jobInfo.name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      Job ID: {jobInfo.id} • Mode: {jobInfo.mode} •{" "}
+                      Request ID: {jobInfo.id} • Mode: {jobInfo.mode} •{" "}
                       {jobInfo.video_count} video(s)
                     </p>
                   </div>
@@ -274,7 +248,7 @@ export default function NewJobPage() {
                 setWorkflowStages([]);
               }}
             >
-              Create Another Job
+              Create Another Request
             </Button>
           </div>
         </div>
@@ -355,12 +329,12 @@ export default function NewJobPage() {
             <WorkflowBuilder stages={workflowStages} onStagesChange={setWorkflowStages} />
           </section>
 
-          {/* Section 3: Job Settings */}
+          {/* Section 3: Request Settings */}
           <section className="bg-card border border-border rounded-lg p-6">
-            <h2 className="text-lg font-medium mb-4">3. Job Settings</h2>
+            <h2 className="text-lg font-medium mb-4">3. Request Settings</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium mb-1 block">Job Name (optional)</label>
+                <label className="text-sm font-medium mb-1 block">Request Name (optional)</label>
                 <Input
                   value={jobName}
                   onChange={(e) => setJobName(e.target.value)}

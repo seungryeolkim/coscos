@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { getVideoUrl } from "@/lib/api";
 
 interface VideoPreviewProps {
@@ -14,17 +14,24 @@ interface VideoPreviewProps {
   syncRef?: React.RefObject<HTMLVideoElement | null>;
 }
 
-export function VideoPreview({
-  src,
-  title,
-  className = "",
-  autoPlay = false,
-  loop = true,
-  muted = true,
-  controls = true,
-  syncRef,
-}: VideoPreviewProps) {
+export const VideoPreview = forwardRef<HTMLVideoElement, VideoPreviewProps>(
+  function VideoPreview(
+    {
+      src,
+      title,
+      className = "",
+      autoPlay = false,
+      loop = true,
+      muted = true,
+      controls = true,
+      syncRef,
+    },
+    ref
+  ) {
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Expose the video element via ref
+  useImperativeHandle(ref, () => videoRef.current as HTMLVideoElement);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
@@ -158,7 +165,7 @@ export function VideoPreview({
       )}
     </div>
   );
-}
+});
 
 // Placeholder component for when video is not available
 export function VideoPlaceholder({

@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { getMockRequest } from "@/lib/mock-data";
-import { getRequest, checkAPIHealth } from "@/lib/api";
+import { getRequest } from "@/lib/api";
 import {
   Request,
   InputVideo,
@@ -32,33 +31,28 @@ export default function RequestDetailPage() {
 
   const [request, setRequest] = useState<Request | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedInputId, setSelectedInputId] = useState<string | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [showCompare, setShowCompare] = useState(false);
+  const inputVideoRef = useRef<HTMLVideoElement>(null);
 
   // Fetch request data
   useEffect(() => {
     async function fetchData() {
       try {
-        // Check if API is available
-        const isHealthy = await checkAPIHealth();
-
-        if (isHealthy) {
-          const response = await getRequest(requestId);
-          if (response.request) {
-            setRequest(response.request);
-            setIsLoading(false);
-            return;
-          }
+        const response = await getRequest(requestId);
+        if (response.request) {
+          setRequest(response.request);
+        } else {
+          setError("Request not found");
         }
-      } catch (error) {
-        console.warn("API fetch failed, using mock data:", error);
+      } catch (err) {
+        console.error("Failed to fetch request:", err);
+        setError("Failed to load request data. Please check API connection.");
+      } finally {
+        setIsLoading(false);
       }
-
-      // Fallback to mock data
-      const mockData = getMockRequest(requestId);
-      setRequest(mockData || null);
-      setIsLoading(false);
     }
 
     fetchData();
@@ -84,13 +78,17 @@ export default function RequestDetailPage() {
     );
   }
 
-  if (!request) {
+  if (error || !request) {
     return (
       <div className="container mx-auto px-6 py-8">
         <div className="text-center py-12">
-          <h1 className="text-xl font-semibold mb-2">Request not found</h1>
+          <h1 className="text-xl font-semibold mb-2">
+            {error || "Request not found"}
+          </h1>
           <p className="text-muted-foreground mb-4">
-            The request you&apos;re looking for doesn&apos;t exist.
+            {error
+              ? "Please check your API connection and try again."
+              : "The request you're looking for doesn't exist."}
           </p>
           <Link href="/">
             <Button variant="outline">Back to Requests</Button>
@@ -113,9 +111,9 @@ export default function RequestDetailPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col">
-      {/* Header */}
-      <div className="border-b border-border px-6 py-4">
+    <div className="h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden">
+      {/* Header - Fixed at top */}
+      <div className="shrink-0 bg-background border-b border-border px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
             <Link
@@ -167,9 +165,9 @@ export default function RequestDetailPage() {
       </div>
 
       {/* Main content: Sidebar + Detail */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left sidebar - Input list */}
-        <div className="w-72 border-r border-border overflow-y-auto">
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Left sidebar - Input list (independent scroll) */}
+        <div className="w-72 border-r border-border overflow-y-auto overscroll-contain shrink-0">
           <div className="p-4">
             <h2 className="text-sm font-medium text-muted-foreground mb-3">Input Videos</h2>
             <div className="space-y-2">
@@ -185,8 +183,8 @@ export default function RequestDetailPage() {
           </div>
         </div>
 
-        {/* Right content - Selected input detail */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* Right content - Selected input detail (independent scroll) */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-6">
           {selectedInput ? (
             <InputDetailView
               input={selectedInput}
@@ -204,22 +202,25 @@ export default function RequestDetailPage() {
       {/* Compare dialog */}
       {selectedInput && (
         <Dialog open={showCompare} onOpenChange={setShowCompare}>
-          <DialogContent className="max-w-5xl">
+          <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>
                 Compare: {selectedInput.rgbFilename} → {selectedVariant?.styleName}
               </DialogTitle>
             </DialogHeader>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-6">
               {/* Input */}
               <div>
                 <div className="text-sm text-muted-foreground mb-2">Input</div>
-                <div className="aspect-video">
+                <div className="aspect-video bg-black rounded-lg overflow-hidden">
                   <VideoPreview
+                    ref={inputVideoRef}
                     src={selectedInput.rgbPath}
                     className="w-full h-full"
                     controls={true}
+                    autoPlay={true}
+                    muted={true}
                   />
                 </div>
               </div>
@@ -229,12 +230,15 @@ export default function RequestDetailPage() {
                 <div className="text-sm text-muted-foreground mb-2">
                   Output ({selectedVariant?.styleName})
                 </div>
-                <div className="aspect-video">
+                <div className="aspect-video bg-black rounded-lg overflow-hidden">
                   {selectedVariant?.outputPath ? (
                     <VideoPreview
                       src={selectedVariant.outputPath}
                       className="w-full h-full"
                       controls={true}
+                      autoPlay={true}
+                      muted={true}
+                      syncRef={inputVideoRef}
                     />
                   ) : (
                     <VideoPlaceholder className="w-full h-full" />

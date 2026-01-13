@@ -301,32 +301,127 @@ export interface GetJobResponse {
 }
 
 // ============ Predefined Styles ============
+// Based on NVIDIA Cosmos Transfer recommended augmentation categories
 
-export const TRANSFER_STYLES: TransferStyle[] = [
+export interface TransferStyleCategory {
+  name: string;
+  styles: TransferStyle[];
+}
+
+// Lighting variations (조명)
+export const LIGHTING_STYLES: TransferStyle[] = [
   {
-    name: "비/우천",
-    prompt: "Same scene during heavy rain with wet surfaces and reflections. Maintain temporal consistency.",
+    name: "일출",
+    prompt: "Same scene during sunrise with soft pink and orange hues on the horizon, gentle morning light casting long shadows, and a gradual transition from darkness to daylight. Maintain temporal consistency.",
   },
   {
-    name: "야간",
-    prompt: "Same scene at night with artificial lighting and headlights. Maintain temporal consistency.",
+    name: "오전",
+    prompt: "Same scene during mid-morning with bright, clear daylight, moderate shadows, and natural color temperature. The sun is positioned at a moderate angle providing even illumination. Maintain temporal consistency.",
+  },
+  {
+    name: "정오",
+    prompt: "Same scene at zenith with the sun directly overhead, minimal shadows, strong contrast, and bright, harsh lighting conditions typical of midday. Maintain temporal consistency.",
+  },
+  {
+    name: "오후",
+    prompt: "Same scene during afternoon with warm, angled sunlight creating defined shadows, slightly golden tint to the lighting, and comfortable visibility. Maintain temporal consistency.",
+  },
+  {
+    name: "골든아워",
+    prompt: "Same scene during golden hour with rich, warm golden-orange lighting, long dramatic shadows, and a soft, cinematic quality to the illumination. Maintain temporal consistency.",
   },
   {
     name: "석양",
-    prompt: "Same scene during sunset with warm golden lighting. Maintain temporal consistency.",
+    prompt: "Same scene during sunset with warm golden and orange lighting, dramatic sky colors, elongated shadows, and a peaceful evening atmosphere. Maintain temporal consistency.",
+  },
+  {
+    name: "블루아워",
+    prompt: "Same scene during blue hour with soft blue ambient light, city lights beginning to appear, and a tranquil twilight atmosphere between sunset and night. Maintain temporal consistency.",
+  },
+  {
+    name: "황혼",
+    prompt: "Same scene during twilight with dim ambient light, mixed artificial and natural lighting, emerging stars, and a gradual transition to nighttime. Maintain temporal consistency.",
+  },
+  {
+    name: "야간",
+    prompt: "Same scene at night with artificial street lighting, vehicle headlights illuminating the road, dark sky, and urban light sources creating pools of illumination. Maintain temporal consistency.",
+  },
+];
+
+// Weather variations (날씨)
+export const WEATHER_STYLES: TransferStyle[] = [
+  {
+    name: "맑은 날",
+    prompt: "Same scene on a clear day with bright blue sky, excellent visibility, crisp shadows, and vibrant colors under direct sunlight. Maintain temporal consistency.",
+  },
+  {
+    name: "흐린 날",
+    prompt: "Same scene on an overcast day with grey cloudy sky, diffused soft lighting, muted shadows, and even illumination across the scene. Maintain temporal consistency.",
+  },
+  {
+    name: "비/우천",
+    prompt: "Same scene during heavy rain with wet reflective road surfaces, water droplets, puddles forming, reduced visibility, and glistening reflections from lights. Maintain temporal consistency.",
   },
   {
     name: "안개",
-    prompt: "Same scene in foggy weather with reduced visibility. Maintain temporal consistency.",
+    prompt: "Same scene in foggy weather with significantly reduced visibility, atmospheric haze, diffused lighting, and objects fading into the mist at distance. Maintain temporal consistency.",
   },
   {
-    name: "포토리얼리즘",
-    prompt: "Same scene with enhanced photorealism. Maintain temporal consistency.",
+    name: "눈 내림",
+    prompt: "Same scene during active snowfall with snowflakes falling through the air, reduced visibility, white accumulation beginning on surfaces, and cold winter atmosphere. Maintain temporal consistency.",
   },
   {
     name: "폭설",
-    prompt: "Same scene during heavy snowfall with snow accumulation on surfaces. Maintain temporal consistency.",
+    prompt: "Same scene during heavy snowfall with thick snow accumulation on all surfaces, limited visibility, white-covered ground and objects, and intense winter conditions. Maintain temporal consistency.",
   },
+];
+
+// Road surface variations (노면)
+export const ROAD_STYLES: TransferStyle[] = [
+  {
+    name: "건조 노면",
+    prompt: "Same scene with dry road surface, clear asphalt texture visible, no moisture or debris, optimal driving conditions with good tire grip. Maintain temporal consistency.",
+  },
+  {
+    name: "젖은 노면",
+    prompt: "Same scene with wet road surface after rain, water puddles scattered across the road, reflective wet asphalt, and potential for hydroplaning conditions. Maintain temporal consistency.",
+  },
+  {
+    name: "눈 덮인 노면",
+    prompt: "Same scene with snow-covered road surface, white snow accumulation on the road, partially visible lane markings, and slippery winter driving conditions. Maintain temporal consistency.",
+  },
+  {
+    name: "모래/사막",
+    prompt: "Same scene with sandy desert road conditions, dust particles in the air, sand accumulation on road edges, arid environment with desert landscape. Maintain temporal consistency.",
+  },
+];
+
+// Special effects (특수 효과)
+export const SPECIAL_STYLES: TransferStyle[] = [
+  {
+    name: "포토리얼리즘",
+    prompt: "Same scene with enhanced photorealism, realistic textures, natural lighting, accurate material properties, and cinematic quality rendering. Maintain temporal consistency.",
+  },
+  {
+    name: "시뮬레이터→실사",
+    prompt: "Same scene transformed from synthetic simulation to photorealistic real-world appearance, with natural textures, realistic lighting, and authentic environmental details. Maintain temporal consistency.",
+  },
+];
+
+// Combined list for backward compatibility
+export const TRANSFER_STYLES: TransferStyle[] = [
+  ...LIGHTING_STYLES,
+  ...WEATHER_STYLES,
+  ...ROAD_STYLES,
+  ...SPECIAL_STYLES,
+];
+
+// Categorized styles for UI display
+export const TRANSFER_STYLE_CATEGORIES: TransferStyleCategory[] = [
+  { name: "조명 (Lighting)", styles: LIGHTING_STYLES },
+  { name: "날씨 (Weather)", styles: WEATHER_STYLES },
+  { name: "노면 (Road Surface)", styles: ROAD_STYLES },
+  { name: "특수 효과 (Special)", styles: SPECIAL_STYLES },
 ];
 
 // ============ Detailed Mode Parameters ============
@@ -540,16 +635,19 @@ export const DEFAULT_REASON_STAGE_CONFIG: ReasonStageConfig = {
   filter_mode: "pass_only",
 };
 
-// Preset Workflows
-export interface PresetWorkflow {
+// Workflow Profile (프로필)
+export interface WorkflowProfile {
   id: string;
   name: string;
   nameKo: string;
   description: string;
   stages: Omit<WorkflowStage, "id">[];
+  isBuiltIn: boolean;
+  createdAt?: string;
 }
 
-export const PRESET_WORKFLOWS: PresetWorkflow[] = [
+// Built-in default profiles
+export const DEFAULT_PROFILES: WorkflowProfile[] = [
   {
     id: "predict-only",
     name: "Predict Only",
@@ -558,6 +656,7 @@ export const PRESET_WORKFLOWS: PresetWorkflow[] = [
     stages: [
       { type: "predict", order: 1, config: DEFAULT_PREDICT_PARAMS },
     ],
+    isBuiltIn: true,
   },
   {
     id: "transfer-only",
@@ -567,6 +666,7 @@ export const PRESET_WORKFLOWS: PresetWorkflow[] = [
     stages: [
       { type: "transfer", order: 1, config: DEFAULT_TRANSFER_PARAMS },
     ],
+    isBuiltIn: true,
   },
   {
     id: "classic-full",
@@ -578,6 +678,7 @@ export const PRESET_WORKFLOWS: PresetWorkflow[] = [
       { type: "transfer", order: 2, config: DEFAULT_TRANSFER_PARAMS },
       { type: "reason", order: 3, config: DEFAULT_REASON_STAGE_CONFIG },
     ],
+    isBuiltIn: true,
   },
   {
     id: "quality-first",
@@ -590,6 +691,7 @@ export const PRESET_WORKFLOWS: PresetWorkflow[] = [
       { type: "transfer", order: 3, config: DEFAULT_TRANSFER_PARAMS },
       { type: "reason", order: 4, config: DEFAULT_REASON_STAGE_CONFIG },
     ],
+    isBuiltIn: true,
   },
   {
     id: "transfer-validated",
@@ -600,8 +702,13 @@ export const PRESET_WORKFLOWS: PresetWorkflow[] = [
       { type: "transfer", order: 1, config: DEFAULT_TRANSFER_PARAMS },
       { type: "reason", order: 2, config: DEFAULT_REASON_STAGE_CONFIG },
     ],
+    isBuiltIn: true,
   },
 ];
+
+// Backward compatibility alias
+export type PresetWorkflow = WorkflowProfile;
+export const PRESET_WORKFLOWS = DEFAULT_PROFILES;
 
 // Helper to generate unique stage ID
 export const generateStageId = () => `stage-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

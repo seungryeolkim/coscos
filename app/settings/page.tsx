@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -26,21 +26,26 @@ import {
   DEFAULT_TRANSFER_PARAMS,
   DEFAULT_REASON_PARAMS,
   TRANSFER_STYLES,
+  TRANSFER_STYLE_CATEGORIES,
   CONTROL_WEIGHT_PRESETS,
+  DEFAULT_PROFILES,
   type TransferStyle,
-  type PredictParams,
   type TransferParams,
-  type ReasonParams,
+  type WorkflowProfile,
 } from "@/lib/types";
+import {
+  getSettings,
+  saveSettings,
+  checkAPIHealth,
+  type AppSettings,
+} from "@/lib/api";
 
 // Settings state types
 interface APISettings {
-  provider: "nim" | "self-hosted";
-  nimApiKey: string;
-  nimEndpoint: string;
-  selfHostedPredictEndpoint: string;
-  selfHostedTransferEndpoint: string;
-  selfHostedReasonEndpoint: string;
+  cosmosApiKey: string;
+  predictEndpoint: string;
+  transferEndpoint: string;
+  reasonEndpoint: string;
   timeout: number;
   maxRetries: number;
   retryBackoff: number;
@@ -58,30 +63,46 @@ interface OutputSettings {
   removeAudio: boolean;
 }
 
-interface Profile {
-  id: string;
-  name: string;
-  description: string;
-  isDefault: boolean;
-  predict: Partial<PredictParams>;
-  transfer: Partial<TransferParams>;
-  reason: Partial<ReasonParams>;
-}
-
 interface CustomStyle extends TransferStyle {
   id: string;
   isBuiltIn: boolean;
 }
 
+// Local storage key for custom profiles (shared with WorkflowBuilder)
+const CUSTOM_PROFILES_KEY = "coscos-custom-profiles";
+
+// Load custom profiles from localStorage
+const loadCustomProfiles = (): WorkflowProfile[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const saved = localStorage.getItem(CUSTOM_PROFILES_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+};
+
+// Save custom profiles to localStorage
+const saveCustomProfiles = (profiles: WorkflowProfile[]) => {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(CUSTOM_PROFILES_KEY, JSON.stringify(profiles));
+};
+
 export default function SettingsPage() {
+  // API connection state
+  const [apiConnected, setApiConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [maskedApiKey, setMaskedApiKey] = useState("");
+
   // API Settings state
   const [apiSettings, setApiSettings] = useState<APISettings>({
-    provider: "self-hosted",
-    nimApiKey: "",
-    nimEndpoint: "https://ai.api.nvidia.com/v1",
-    selfHostedPredictEndpoint: "http://localhost:8000",
-    selfHostedTransferEndpoint: "http://localhost:8001",
-    selfHostedReasonEndpoint: "http://localhost:8002",
+    cosmosApiKey: "",
+    predictEndpoint: "http://localhost:8000/predict",
+    transferEndpoint: "http://localhost:8000/transfer",
+    reasonEndpoint: "http://localhost:8001/reason",
     timeout: 300,
     maxRetries: 3,
     retryBackoff: 2.0,
@@ -89,7 +110,7 @@ export default function SettingsPage() {
 
   // Output Settings state
   const [outputSettings, setOutputSettings] = useState<OutputSettings>({
-    outputDirectory: "~/cosmosqzb/output",
+    outputDirectory: "~/coscos/output",
     createDatedFolders: true,
     saveRejectedVideos: true,
     saveIntermediateFiles: false,
@@ -105,6 +126,122 @@ export default function SettingsPage() {
   const [transferDefaults, setTransferDefaults] = useState(DEFAULT_TRANSFER_PARAMS);
   const [reasonDefaults, setReasonDefaults] = useState(DEFAULT_REASON_PARAMS);
   const [useRandomSeed, setUseRandomSeed] = useState(false);
+
+  // Load settings from API on mount
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const isHealthy = await checkAPIHealth();
+        setApiConnected(isHealthy);
+
+        if (isHealthy) {
+          const response = await getSettings();
+          const s = response.settings;
+          const api = s?.api || {};
+          const output = s?.output || {};
+          const defaults = s?.defaults || {};
+
+          // Update API settings (with fallbacks for undefined values)
+          setApiSettings({
+            cosmosApiKey: "", // API key is not returned for security
+            predictEndpoint: api.predict_endpoint || "http://localhost:8000/predict",
+            transferEndpoint: api.transfer_endpoint || "http://localhost:8000/transfer",
+            reasonEndpoint: api.reason_endpoint || "http://localhost:8001/reason",
+            timeout: api.timeout ?? 300,
+            maxRetries: api.max_retries ?? 3,
+            retryBackoff: api.retry_backoff ?? 2.0,
+          });
+          setHasApiKey(api.has_api_key ?? false);
+          setMaskedApiKey(api.cosmos_api_key_masked || "");
+
+          // Update output settings (with fallbacks for undefined values)
+          setOutputSettings({
+            outputDirectory: output.output_directory || "~/coscos/output",
+            createDatedFolders: output.create_dated_folders ?? true,
+            saveRejectedVideos: output.save_rejected_videos ?? true,
+            saveIntermediateFiles: output.save_intermediate_files ?? false,
+            namingPrefix: output.naming_prefix || "",
+            namingSuffix: output.naming_suffix || "_variant",
+            codec: output.codec || "h264",
+            quality: output.quality || "high",
+            removeAudio: output.remove_audio ?? true,
+          });
+
+          // Update defaults if saved
+          if (defaults.predict && Object.keys(defaults.predict).length > 0) {
+            setPredictDefaults((prev) => ({ ...prev, ...defaults.predict }));
+          }
+          if (defaults.transfer && Object.keys(defaults.transfer).length > 0) {
+            setTransferDefaults((prev) => ({ ...prev, ...defaults.transfer }));
+          }
+          if (defaults.reason && Object.keys(defaults.reason).length > 0) {
+            setReasonDefaults((prev) => ({ ...prev, ...defaults.reason }));
+          }
+          setUseRandomSeed(defaults.use_random_seed ?? false);
+        }
+      } catch (error) {
+        console.warn("Failed to load settings:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadSettings();
+  }, []);
+
+  // Save settings to API
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveMessage(null);
+
+    try {
+      const settingsToSave: Partial<AppSettings> = {
+        api: {
+          cosmos_api_key: apiSettings.cosmosApiKey, // Empty string = keep existing
+          predict_endpoint: apiSettings.predictEndpoint,
+          transfer_endpoint: apiSettings.transferEndpoint,
+          reason_endpoint: apiSettings.reasonEndpoint,
+          timeout: apiSettings.timeout,
+          max_retries: apiSettings.maxRetries,
+          retry_backoff: apiSettings.retryBackoff,
+        },
+        output: {
+          output_directory: outputSettings.outputDirectory,
+          create_dated_folders: outputSettings.createDatedFolders,
+          save_rejected_videos: outputSettings.saveRejectedVideos,
+          save_intermediate_files: outputSettings.saveIntermediateFiles,
+          naming_prefix: outputSettings.namingPrefix,
+          naming_suffix: outputSettings.namingSuffix,
+          codec: outputSettings.codec,
+          quality: outputSettings.quality,
+          remove_audio: outputSettings.removeAudio,
+        },
+        defaults: {
+          predict: { ...predictDefaults },
+          transfer: { ...transferDefaults },
+          reason: { ...reasonDefaults },
+          use_random_seed: useRandomSeed,
+        },
+      };
+
+      const response = await saveSettings(settingsToSave);
+
+      if (response.success) {
+        setSaveMessage({ type: "success", text: "Settings saved successfully" });
+        setHasApiKey(response.settings.api.has_api_key || false);
+        setMaskedApiKey(response.settings.api.cosmos_api_key_masked || "");
+        setApiSettings((prev) => ({ ...prev, cosmosApiKey: "" })); // Clear input after save
+      } else {
+        setSaveMessage({ type: "error", text: "Failed to save settings" });
+      }
+    } catch (error) {
+      setSaveMessage({ type: "error", text: error instanceof Error ? error.message : "Failed to save settings" });
+    } finally {
+      setIsSaving(false);
+      // Clear message after 3 seconds
+      setTimeout(() => setSaveMessage(null), 3000);
+    }
+  };
 
   // Transfer JSON Editor state
   const [transferJsonCode, setTransferJsonCode] = useState("");
@@ -170,48 +307,70 @@ export default function SettingsPage() {
     [activeTransferTab, applyTransferJson]
   );
 
-  // Profiles state
-  const [profiles, setProfiles] = useState<Profile[]>([
-    {
-      id: "1",
-      name: "Autonomous Driving",
-      description: "Transfer: Rain, Night, Sunset, Fog | Threshold: 0.75",
-      isDefault: true,
-      predict: {},
-      transfer: { styles: TRANSFER_STYLES.slice(0, 4) },
-      reason: { threshold: 0.75 },
-    },
-    {
-      id: "2",
-      name: "Robotics",
-      description: "Photorealism only | Threshold: 0.80",
-      isDefault: false,
-      predict: {},
-      transfer: { styles: [TRANSFER_STYLES[4]] },
-      reason: { threshold: 0.8 },
-    },
-    {
-      id: "3",
-      name: "Quick Test",
-      description: "Low quality, fast processing | Steps: 10, Model: 2B",
-      isDefault: false,
-      predict: { model_size: "2B" },
-      transfer: { num_steps: 10 },
-      reason: { model_size: "2B" },
-    },
-  ]);
-
   // Custom Styles state
   const [customStyles, setCustomStyles] = useState<CustomStyle[]>([
     ...TRANSFER_STYLES.map((s, i) => ({ ...s, id: `builtin-${i}`, isBuiltIn: true })),
   ]);
 
+  // Custom Profiles state (shared with WorkflowBuilder)
+  const [customProfiles, setCustomProfiles] = useState<WorkflowProfile[]>([]);
+
+  // Load custom profiles on mount
+  useEffect(() => {
+    setCustomProfiles(loadCustomProfiles());
+  }, []);
+
+  // Delete custom profile
+  const deleteCustomProfile = (profileId: string) => {
+    const updatedProfiles = customProfiles.filter((p) => p.id !== profileId);
+    setCustomProfiles(updatedProfiles);
+    saveCustomProfiles(updatedProfiles);
+  };
+
+  // Export profiles to JSON
+  const exportProfiles = () => {
+    const allProfiles = [...DEFAULT_PROFILES, ...customProfiles];
+    const blob = new Blob([JSON.stringify(allProfiles, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "coscos-profiles.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Import profiles from JSON
+  const importProfiles = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const imported = JSON.parse(e.target?.result as string) as WorkflowProfile[];
+        const newCustom = imported.filter((p) => !p.isBuiltIn);
+        const merged = [...customProfiles];
+        newCustom.forEach((p) => {
+          if (!merged.find((m) => m.id === p.id)) {
+            merged.push({ ...p, isBuiltIn: false });
+          }
+        });
+        setCustomProfiles(merged);
+        saveCustomProfiles(merged);
+      } catch {
+        alert("Invalid profile JSON file");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  };
+
   // Connection test states
   const [testingConnections, setTestingConnections] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<Record<string, "success" | "error" | null>>({});
 
-  // Active section for mobile navigation
-  const [activeSection, setActiveSection] = useState("api");
+  // Active tab for navigation
+  const [activeTab, setActiveTab] = useState("api");
 
   const testConnections = async () => {
     setTestingConnections(true);
@@ -234,18 +393,6 @@ export default function SettingsPage() {
     setUseRandomSeed(false);
   };
 
-  const setDefaultProfile = (profileId: string) => {
-    setProfiles((prev) =>
-      prev.map((p) => ({
-        ...p,
-        isDefault: p.id === profileId,
-      }))
-    );
-  };
-
-  const deleteProfile = (profileId: string) => {
-    setProfiles((prev) => prev.filter((p) => p.id !== profileId));
-  };
 
   const addCustomStyle = () => {
     const newStyle: CustomStyle = {
@@ -262,211 +409,188 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="container mx-auto px-6 py-8 max-w-6xl">
+    <div className="container mx-auto px-6 py-8">
       {/* Page Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground mt-2">
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-1">
+          <h1 className="text-2xl font-semibold">Settings</h1>
+          {!isLoading && (
+            <span
+              className={`text-xs px-2 py-0.5 rounded ${
+                apiConnected
+                  ? "bg-success/10 text-success"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {apiConnected ? "API Connected" : "API Offline"}
+            </span>
+          )}
+        </div>
+        <p className="text-muted-foreground">
           Configure API connections, output options, and default parameters
         </p>
       </div>
 
-      {/* Section Navigation - Mobile */}
-      <div className="flex gap-2 overflow-x-auto pb-4 mb-6 lg:hidden">
-        {["api", "output", "defaults", "profiles", "styles"].map((section) => (
-          <Button
-            key={section}
-            variant={activeSection === section ? "default" : "outline"}
-            size="sm"
-            onClick={() => setActiveSection(section)}
-            className="whitespace-nowrap"
+      {/* Tab Navigation */}
+      <div className="flex gap-1 p-1 bg-muted rounded-lg mb-6 overflow-x-auto">
+        {[
+          { id: "api", label: "API" },
+          { id: "output", label: "Output" },
+          { id: "defaults", label: "Defaults" },
+          { id: "profiles", label: "Profiles" },
+          { id: "styles", label: "Styles" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+              activeTab === tab.id
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
           >
-            {section === "api" && "API"}
-            {section === "output" && "Output"}
-            {section === "defaults" && "Defaults"}
-            {section === "profiles" && "Profiles"}
-            {section === "styles" && "Styles"}
-          </Button>
+            {tab.label}
+          </button>
         ))}
       </div>
 
-      <div className="grid gap-6">
+      {/* Tab Content */}
+      <div className="space-y-6">
         {/* 1. API Configuration */}
-        <Card className={activeSection !== "api" ? "hidden lg:block" : ""}>
+        {activeTab === "api" && (
+        <Card>
           <CardHeader>
             <CardTitle>API Configuration</CardTitle>
             <CardDescription>
-              Configure NVIDIA NIM or self-hosted model endpoints
+              Self-hosted Cosmos 2.5 모델 엔드포인트 설정
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Provider Selection */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium">Provider</label>
-              <div className="flex flex-col gap-3">
-                <label className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50 transition-colors">
-                  <input
-                    type="radio"
-                    name="provider"
-                    checked={apiSettings.provider === "nim"}
-                    onChange={() =>
-                      setApiSettings((prev) => ({ ...prev, provider: "nim" }))
-                    }
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <div className="font-medium">NVIDIA NIM (Cloud)</div>
-                    <div className="text-sm text-muted-foreground">
-                      Fast startup, usage-based billing
-                    </div>
-                  </div>
-                </label>
-                <label className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50 transition-colors">
-                  <input
-                    type="radio"
-                    name="provider"
-                    checked={apiSettings.provider === "self-hosted"}
-                    onChange={() =>
-                      setApiSettings((prev) => ({ ...prev, provider: "self-hosted" }))
-                    }
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <div className="font-medium">Self-hosted (RunPod/Local)</div>
-                    <div className="text-sm text-muted-foreground">
-                      Unlimited usage, self-managed
-                    </div>
-                  </div>
-                </label>
+            {/* Cosmos API Key Section */}
+            <div className="space-y-3 p-4 rounded-lg border bg-gradient-to-r from-cyan-500/5 to-transparent">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium text-sm">Cosmos API Key</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Self-hosted 서버 인증용 Bearer Token
+                  </p>
+                </div>
               </div>
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  placeholder={hasApiKey ? `Current: ${maskedApiKey}` : "your-api-key..."}
+                  value={apiSettings.cosmosApiKey}
+                  onChange={(e) =>
+                    setApiSettings((prev) => ({
+                      ...prev,
+                      cosmosApiKey: e.target.value,
+                    }))
+                  }
+                  className="flex-1"
+                />
+                {hasApiKey && (
+                  <span className="flex items-center text-xs text-success px-2">
+                    ✓ Saved
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                비어있으면 기존 키가 유지됩니다. 서버에서 COSMOS_API_KEY가 설정되지 않은 경우 인증을 건너뜁니다 (개발 모드).
+              </p>
             </div>
 
-            {/* NIM Settings */}
-            {apiSettings.provider === "nim" && (
-              <div className="space-y-4 p-4 rounded-lg border bg-accent/20">
-                <h4 className="font-medium text-sm">NVIDIA NIM Settings</h4>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm">API Key</label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="password"
-                        placeholder="nvapi-xxxx..."
-                        value={apiSettings.nimApiKey}
-                        onChange={(e) =>
-                          setApiSettings((prev) => ({
-                            ...prev,
-                            nimApiKey: e.target.value,
-                          }))
-                        }
-                      />
-                      <Button variant="outline" size="sm">
-                        Show
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm">Endpoint</label>
-                    <Input
-                      value={apiSettings.nimEndpoint}
-                      onChange={(e) =>
-                        setApiSettings((prev) => ({
-                          ...prev,
-                          nimEndpoint: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Endpoint Configuration */}
+            <div className="space-y-4">
+              <h4 className="font-medium text-sm">Endpoint URLs</h4>
 
-            {/* Self-hosted Settings */}
-            {apiSettings.provider === "self-hosted" && (
-              <div className="space-y-4 p-4 rounded-lg border bg-accent/20">
-                <h4 className="font-medium text-sm">Self-hosted Endpoints</h4>
-                <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm flex items-center gap-2">
-                      Predict Endpoint
-                      {connectionStatus.predict && (
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded ${
-                            connectionStatus.predict === "success"
-                              ? "bg-green-500/20 text-green-500"
-                              : "bg-red-500/20 text-red-500"
-                          }`}
-                        >
-                          {connectionStatus.predict === "success" ? "Connected" : "Failed"}
-                        </span>
-                      )}
-                    </label>
-                    <Input
-                      placeholder="http://localhost:8000"
-                      value={apiSettings.selfHostedPredictEndpoint}
-                      onChange={(e) =>
-                        setApiSettings((prev) => ({
-                          ...prev,
-                          selfHostedPredictEndpoint: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm flex items-center gap-2">
-                      Transfer Endpoint
-                      {connectionStatus.transfer && (
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded ${
-                            connectionStatus.transfer === "success"
-                              ? "bg-green-500/20 text-green-500"
-                              : "bg-red-500/20 text-red-500"
-                          }`}
-                        >
-                          {connectionStatus.transfer === "success" ? "Connected" : "Failed"}
-                        </span>
-                      )}
-                    </label>
-                    <Input
-                      placeholder="http://localhost:8001"
-                      value={apiSettings.selfHostedTransferEndpoint}
-                      onChange={(e) =>
-                        setApiSettings((prev) => ({
-                          ...prev,
-                          selfHostedTransferEndpoint: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm flex items-center gap-2">
-                      Reason Endpoint
-                      {connectionStatus.reason && (
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded ${
-                            connectionStatus.reason === "success"
-                              ? "bg-green-500/20 text-green-500"
-                              : "bg-red-500/20 text-red-500"
-                          }`}
-                        >
-                          {connectionStatus.reason === "success" ? "Connected" : "Failed"}
-                        </span>
-                      )}
-                    </label>
-                    <Input
-                      placeholder="http://localhost:8002"
-                      value={apiSettings.selfHostedReasonEndpoint}
-                      onChange={(e) =>
-                        setApiSettings((prev) => ({
-                          ...prev,
-                          selfHostedReasonEndpoint: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
+              {/* Predict Endpoint */}
+              <div className="p-4 rounded-lg border space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-cyan-500">Predict</span>
+                  <span className="text-xs text-muted-foreground">Cosmos-Predict2.5</span>
+                  {connectionStatus.predict && (
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded ${
+                        connectionStatus.predict === "success"
+                          ? "bg-green-500/20 text-green-500"
+                          : "bg-red-500/20 text-red-500"
+                      }`}
+                    >
+                      {connectionStatus.predict === "success" ? "Connected" : "Failed"}
+                    </span>
+                  )}
                 </div>
+                <Input
+                  placeholder="http://localhost:8000/predict"
+                  value={apiSettings.predictEndpoint}
+                  onChange={(e) =>
+                    setApiSettings((prev) => ({
+                      ...prev,
+                      predictEndpoint: e.target.value,
+                    }))
+                  }
+                />
               </div>
-            )}
+
+              {/* Transfer Endpoint */}
+              <div className="p-4 rounded-lg border space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-purple-500">Transfer</span>
+                  <span className="text-xs text-muted-foreground">Cosmos-Transfer2.5</span>
+                  {connectionStatus.transfer && (
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded ${
+                        connectionStatus.transfer === "success"
+                          ? "bg-green-500/20 text-green-500"
+                          : "bg-red-500/20 text-red-500"
+                      }`}
+                    >
+                      {connectionStatus.transfer === "success" ? "Connected" : "Failed"}
+                    </span>
+                  )}
+                </div>
+                <Input
+                  placeholder="http://localhost:8000/transfer"
+                  value={apiSettings.transferEndpoint}
+                  onChange={(e) =>
+                    setApiSettings((prev) => ({
+                      ...prev,
+                      transferEndpoint: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              {/* Reason Endpoint */}
+              <div className="p-4 rounded-lg border space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-orange-500">Reason</span>
+                  <span className="text-xs text-muted-foreground">Cosmos-Reason2</span>
+                  {connectionStatus.reason && (
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded ${
+                        connectionStatus.reason === "success"
+                          ? "bg-green-500/20 text-green-500"
+                          : "bg-red-500/20 text-red-500"
+                      }`}
+                    >
+                      {connectionStatus.reason === "success" ? "Connected" : "Failed"}
+                    </span>
+                  )}
+                </div>
+                <Input
+                  placeholder="http://localhost:8001/reason"
+                  value={apiSettings.reasonEndpoint}
+                  onChange={(e) =>
+                    setApiSettings((prev) => ({
+                      ...prev,
+                      reasonEndpoint: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
 
             {/* Connection Settings */}
             <div className="space-y-4">
@@ -528,9 +652,11 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+        )}
 
         {/* 2. Output Configuration */}
-        <Card className={activeSection !== "output" ? "hidden lg:block" : ""}>
+        {activeTab === "output" && (
+        <Card>
           <CardHeader>
             <CardTitle>Output Configuration</CardTitle>
             <CardDescription>
@@ -705,9 +831,11 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+        )}
 
         {/* 3. Default Values */}
-        <Card className={activeSection !== "defaults" ? "hidden lg:block" : ""}>
+        {activeTab === "defaults" && (
+        <Card>
           <CardHeader>
             <CardTitle>Default Values</CardTitle>
             <CardDescription>
@@ -1099,110 +1227,145 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+        )}
 
-        {/* 4. Profiles & Presets */}
-        <Card className={activeSection !== "profiles" ? "hidden lg:block" : ""}>
+        {/* 4. Profiles */}
+        {activeTab === "profiles" && (
+        <Card>
           <CardHeader>
-            <CardTitle>Profiles & Presets</CardTitle>
+            <CardTitle>Profiles (프로필)</CardTitle>
             <CardDescription>
-              Save and manage configuration profiles for different use cases
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Profile List */}
-            <div className="space-y-3">
-              {profiles.map((profile) => (
-                <div
-                  key={profile.id}
-                  className={`p-4 rounded-lg border ${
-                    profile.isDefault ? "border-foreground/30 bg-accent/30" : ""
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="radio"
-                        name="default-profile"
-                        checked={profile.isDefault}
-                        onChange={() => setDefaultProfile(profile.id)}
-                        className="mt-1"
-                      />
-                      <div>
-                        <div className="font-medium flex items-center gap-2">
-                          {profile.name}
-                          {profile.isDefault && (
-                            <span className="text-xs px-2 py-0.5 rounded bg-foreground/10">
-                              Default
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {profile.description}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        Edit
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteProfile(profile.id)}
-                        disabled={profile.isDefault}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline">+ Create New Profile</Button>
-              <Button variant="outline">Import</Button>
-              <Button variant="outline">Export</Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 5. Style Prompts Library */}
-        <Card className={activeSection !== "styles" ? "hidden lg:block" : ""}>
-          <CardHeader>
-            <CardTitle>Style Prompts Library</CardTitle>
-            <CardDescription>
-              Manage built-in and custom style prompts for transfer
+              워크플로우 프로필 관리 - New Job에서 생성한 프로필이 여기에 표시됩니다
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Built-in Styles */}
+            {/* Built-in Profiles */}
             <div className="space-y-3">
               <h4 className="font-medium text-sm text-muted-foreground">
-                Built-in Styles
+                Built-in Profiles ({DEFAULT_PROFILES.length})
               </h4>
-              {customStyles
-                .filter((s) => s.isBuiltIn)
-                .map((style) => (
+              <div className="grid gap-2">
+                {DEFAULT_PROFILES.map((profile) => (
                   <div
-                    key={style.id}
-                    className="p-4 rounded-lg border bg-accent/10"
+                    key={profile.id}
+                    className="p-3 rounded-lg border bg-accent/10"
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="font-medium">{style.name}</div>
-                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                          &ldquo;{style.prompt}&rdquo;
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-sm">{profile.nameKo}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {profile.description}
                         </p>
                       </div>
-                      <Button variant="outline" size="sm">
-                        Duplicate
-                      </Button>
+                      <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">
+                        Built-in
+                      </span>
                     </div>
                   </div>
                 ))}
+              </div>
             </div>
+
+            {/* Custom Profiles */}
+            <div className="space-y-3">
+              <h4 className="font-medium text-sm text-muted-foreground">
+                Custom Profiles ({customProfiles.length})
+              </h4>
+              {customProfiles.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center border rounded-lg">
+                  아직 커스텀 프로필이 없습니다. New Job에서 워크플로우를 저장하면 여기에 표시됩니다.
+                </p>
+              ) : (
+                <div className="grid gap-2">
+                  {customProfiles.map((profile) => (
+                    <div
+                      key={profile.id}
+                      className="p-3 rounded-lg border"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-sm">{profile.nameKo}</div>
+                          <p className="text-xs text-muted-foreground">
+                            {profile.description}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteCustomProfile(profile.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Import/Export */}
+            <div className="flex gap-2 pt-4 border-t">
+              <Button variant="outline" onClick={exportProfiles}>
+                Export All
+              </Button>
+              <label>
+                <Button variant="outline" asChild>
+                  <span>Import</span>
+                </Button>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={importProfiles}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </CardContent>
+        </Card>
+        )}
+
+        {/* 5. Style Prompts Library */}
+        {activeTab === "styles" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Style Prompts Library</CardTitle>
+            <CardDescription>
+              NVIDIA Cosmos Transfer 권장 스타일 프롬프트 ({TRANSFER_STYLES.length}개)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Built-in Styles by Category */}
+            {TRANSFER_STYLE_CATEGORIES.map((category) => (
+              <div key={category.name} className="space-y-3">
+                <h4 className="font-medium text-sm flex items-center gap-2">
+                  {category.name}
+                  <span className="text-xs text-muted-foreground font-normal">
+                    ({category.styles.length})
+                  </span>
+                </h4>
+                <div className="grid gap-2">
+                  {category.styles.map((style, idx) => (
+                    <div
+                      key={`${category.name}-${idx}`}
+                      className="p-3 rounded-lg border bg-accent/10 hover:bg-accent/20 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">{style.name}</div>
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                            &ldquo;{style.prompt}&rdquo;
+                          </p>
+                        </div>
+                        <Button variant="outline" size="sm" className="shrink-0">
+                          Duplicate
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
 
             {/* Custom Styles */}
             <div className="space-y-3">
@@ -1248,11 +1411,29 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+        )}
+      </div>
 
-        {/* Save Button */}
-        <div className="flex justify-end gap-4 pt-4">
-          <Button variant="outline">Cancel</Button>
-          <Button>Save Settings</Button>
+      {/* Save Button - Always Visible */}
+      <div className="flex items-center justify-between pt-6 mt-6 border-t">
+        <div>
+          {saveMessage && (
+            <span
+              className={`text-sm ${
+                saveMessage.type === "success" ? "text-success" : "text-error"
+              }`}
+            >
+              {saveMessage.text}
+            </span>
+          )}
+        </div>
+        <div className="flex gap-4">
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={isSaving || !apiConnected}>
+            {isSaving ? "Saving..." : "Save Settings"}
+          </Button>
         </div>
       </div>
     </div>

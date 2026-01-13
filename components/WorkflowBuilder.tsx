@@ -20,8 +20,9 @@ import {
   PredictParams,
   TransferParams,
   ReasonStageConfig,
+  WorkflowProfile,
   STAGE_METADATA,
-  PRESET_WORKFLOWS,
+  DEFAULT_PROFILES,
   DEFAULT_PREDICT_PARAMS,
   DEFAULT_TRANSFER_PARAMS,
   DEFAULT_REASON_STAGE_CONFIG,
@@ -37,11 +38,44 @@ interface WorkflowBuilderProps {
   onStagesChange: (stages: WorkflowStage[]) => void;
 }
 
+// Local storage key for custom profiles
+const CUSTOM_PROFILES_KEY = "coscos-custom-profiles";
+
+// Load custom profiles from localStorage
+const loadCustomProfiles = (): WorkflowProfile[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const saved = localStorage.getItem(CUSTOM_PROFILES_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+};
+
+// Save custom profiles to localStorage
+const saveCustomProfiles = (profiles: WorkflowProfile[]) => {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(CUSTOM_PROFILES_KEY, JSON.stringify(profiles));
+};
+
 export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps) {
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [configEditMode, setConfigEditMode] = useState<"ui" | "json">("ui");
   const [jsonCode, setJsonCode] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
+
+  // Custom profiles state
+  const [customProfiles, setCustomProfiles] = useState<WorkflowProfile[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [newProfileName, setNewProfileName] = useState("");
+
+  // Load custom profiles on mount
+  useEffect(() => {
+    setCustomProfiles(loadCustomProfiles());
+  }, []);
+
+  // All profiles (built-in + custom)
+  const allProfiles = useMemo(() => [...DEFAULT_PROFILES, ...customProfiles], [customProfiles]);
 
   const validation = useMemo(() => validateWorkflow(stages), [stages]);
 
@@ -130,23 +164,55 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
     [stages, onStagesChange]
   );
 
-  // Apply preset workflow
-  const applyPreset = useCallback(
-    (presetId: string) => {
-      const preset = PRESET_WORKFLOWS.find((p) => p.id === presetId);
-      if (!preset) return;
+  // Apply profile to workflow
+  const applyProfile = useCallback(
+    (profileId: string) => {
+      const profile = allProfiles.find((p) => p.id === profileId);
+      if (!profile) return;
 
-      const newStages: WorkflowStage[] = preset.stages.map((s) => ({
+      const newStages: WorkflowStage[] = profile.stages.map((s) => ({
         ...s,
         id: generateStageId(),
-        config: { ...s.config },
+        config: JSON.parse(JSON.stringify(s.config)), // Deep clone
       }));
 
       onStagesChange(newStages);
       setActiveStageId(newStages.length > 0 ? newStages[0].id : null);
     },
-    [onStagesChange]
+    [allProfiles, onStagesChange]
   );
+
+  // Save current workflow as profile
+  const saveAsProfile = useCallback(() => {
+    if (!newProfileName.trim() || stages.length === 0) return;
+
+    const newProfile: WorkflowProfile = {
+      id: `custom-${Date.now()}`,
+      name: newProfileName.trim(),
+      nameKo: newProfileName.trim(),
+      description: stages.map((s) => STAGE_METADATA[s.type].label).join(" → "),
+      stages: stages.map((s) => ({
+        type: s.type,
+        order: s.order,
+        config: JSON.parse(JSON.stringify(s.config)),
+      })),
+      isBuiltIn: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedProfiles = [...customProfiles, newProfile];
+    setCustomProfiles(updatedProfiles);
+    saveCustomProfiles(updatedProfiles);
+    setShowSaveDialog(false);
+    setNewProfileName("");
+  }, [newProfileName, stages, customProfiles]);
+
+  // Delete custom profile
+  const deleteProfile = useCallback((profileId: string) => {
+    const updatedProfiles = customProfiles.filter((p) => p.id !== profileId);
+    setCustomProfiles(updatedProfiles);
+    saveCustomProfiles(updatedProfiles);
+  }, [customProfiles]);
 
   // Clear all stages
   const clearStages = useCallback(() => {
@@ -209,25 +275,118 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
 
   return (
     <div className="space-y-6">
-      {/* Preset Workflows */}
+      {/* Profiles Section */}
       <div>
-        <label className="text-sm font-medium mb-2 block">Quick Presets</label>
-        <div className="flex flex-wrap gap-2">
-          {PRESET_WORKFLOWS.map((preset) => (
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium">Profiles (프로필)</label>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSaveDialog(true)}
+            disabled={stages.length === 0}
+            className="text-xs h-7"
+          >
+            + 현재 워크플로우 저장
+          </Button>
+        </div>
+
+        {/* Save Profile Dialog */}
+        {showSaveDialog && (
+          <div className="mb-3 p-3 rounded-lg border bg-accent/30 space-y-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="프로필 이름..."
+                value={newProfileName}
+                onChange={(e) => setNewProfileName(e.target.value)}
+                className="flex-1 h-8 text-sm"
+                onKeyDown={(e) => e.key === "Enter" && saveAsProfile()}
+              />
+              <Button size="sm" onClick={saveAsProfile} disabled={!newProfileName.trim()} className="h-8">
+                저장
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowSaveDialog(false)} className="h-8">
+                취소
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Built-in Profiles */}
+        <div className="flex flex-wrap gap-2 mb-2">
+          {DEFAULT_PROFILES.map((profile) => (
             <Button
-              key={preset.id}
+              key={profile.id}
               variant="outline"
               size="sm"
-              onClick={() => applyPreset(preset.id)}
+              onClick={() => applyProfile(profile.id)}
               className="text-xs"
             >
-              {preset.nameKo}
+              {profile.nameKo}
             </Button>
           ))}
         </div>
+
+        {/* Custom Profiles */}
+        {customProfiles.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {customProfiles.map((profile) => (
+              <div key={profile.id} className="flex items-center gap-1">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => applyProfile(profile.id)}
+                  className="text-xs"
+                >
+                  {profile.nameKo}
+                </Button>
+                <button
+                  onClick={() => deleteProfile(profile.id)}
+                  className="text-muted-foreground hover:text-destructive text-xs px-1"
+                  title="삭제"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Pipeline Builder - Now at top */}
+      {/* Available Stages - First */}
+      <div>
+        <label className="text-sm font-medium mb-2 block">Available Stages</label>
+        <div className="grid grid-cols-3 gap-3">
+          {(["predict", "transfer", "reason"] as StageType[]).map((type) => {
+            const meta = STAGE_METADATA[type];
+            const canAdd = stages.length < 4 && !(stages.length === 0 && type === "reason");
+            return (
+              <button
+                key={type}
+                onClick={() => addStage(type)}
+                disabled={!canAdd}
+                className={`p-4 rounded-lg border-2 text-left transition-all ${
+                  canAdd
+                    ? "border-border hover:border-primary hover:bg-primary/5 cursor-pointer"
+                    : "border-border/50 opacity-50 cursor-not-allowed"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xl">{meta.icon}</span>
+                  <span className={`font-semibold ${meta.color}`}>{meta.label}</span>
+                </div>
+                <div className="text-xs text-muted-foreground">{meta.description}</div>
+                <div className="mt-2">
+                  <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary">
+                    + Add
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Pipeline Builder - Below available stages */}
       <div className="border border-border rounded-lg p-4 bg-card/50">
         <div className="flex items-center justify-between mb-3">
           <label className="text-sm font-medium">Your Pipeline</label>
@@ -263,23 +422,23 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
               ))}
             </div>
           ) : (
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 w-full">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-3 pl-3 w-full">
               {stages.map((stage, index) => {
                 const meta = STAGE_METADATA[stage.type];
                 const isActive = activeStageId === stage.id;
                 return (
-                  <div key={stage.id} className="flex items-center">
+                  <div key={stage.id} className="flex items-center overflow-visible">
                     {/* Stage Card */}
                     <div
                       onClick={() => setActiveStageId(stage.id)}
-                      className={`relative p-3 rounded-lg border-2 cursor-pointer transition-all min-w-[140px] ${
+                      className={`relative p-3 rounded-lg border-2 cursor-pointer transition-all min-w-[140px] overflow-visible ${
                         isActive
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-muted-foreground"
                       }`}
                     >
                       {/* Order number */}
-                      <div className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-foreground text-background text-xs font-bold flex items-center justify-center">
+                      <div className="absolute -top-3 -left-3 w-6 h-6 rounded-full bg-foreground text-background text-xs font-bold flex items-center justify-center z-10">
                         {stage.order}
                       </div>
 
@@ -369,43 +528,9 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
         )}
       </div>
 
-      {/* Available Stages - Now below pipeline */}
-      <div>
-        <label className="text-sm font-medium mb-2 block">Available Stages</label>
-        <div className="grid grid-cols-3 gap-3">
-          {(["predict", "transfer", "reason"] as StageType[]).map((type) => {
-            const meta = STAGE_METADATA[type];
-            const canAdd = stages.length < 4 && !(stages.length === 0 && type === "reason");
-            return (
-              <button
-                key={type}
-                onClick={() => addStage(type)}
-                disabled={!canAdd}
-                className={`p-4 rounded-lg border-2 text-left transition-all ${
-                  canAdd
-                    ? "border-border hover:border-primary hover:bg-primary/5 cursor-pointer"
-                    : "border-border/50 opacity-50 cursor-not-allowed"
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xl">{meta.icon}</span>
-                  <span className={`font-semibold ${meta.color}`}>{meta.label}</span>
-                </div>
-                <div className="text-xs text-muted-foreground">{meta.description}</div>
-                <div className="mt-2">
-                  <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary">
-                    + Add
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Stage Configuration Panel */}
       {activeStage && (
-        <div className="border border-border rounded-lg p-4 bg-card">
+        <div className="border-2 border-primary rounded-lg p-4 bg-card shadow-lg shadow-primary/10">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-medium">
               Configure Stage {activeStage.order}: {STAGE_METADATA[activeStage.type].label}

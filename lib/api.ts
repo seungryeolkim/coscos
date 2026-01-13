@@ -1,5 +1,5 @@
 /**
- * API client for CosmosQZB backend
+ * API client for Coscos backend
  */
 
 import {
@@ -203,12 +203,34 @@ export async function browseDirectory(
 // ============ Jobs API ============
 
 /**
- * Create a new pipeline job
+ * Create a new pipeline job (legacy config format)
  */
 export async function createJob(params: {
   name?: string;
   video_paths: string[];
-  config: JobConfig;
+  config?: JobConfig;
+}): Promise<CreateJobResponse> {
+  return fetchAPI("/api/v1/jobs", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+/**
+ * Create a new pipeline job with workflow
+ */
+export async function createWorkflowJob(params: {
+  name?: string;
+  video_paths: string[];
+  workflow: {
+    stages: Array<{
+      id: string;
+      type: "predict" | "transfer" | "reason";
+      order: number;
+      config: Record<string, unknown>;
+    }>;
+    name?: string;
+  };
 }): Promise<CreateJobResponse> {
   return fetchAPI("/api/v1/jobs", {
     method: "POST",
@@ -244,5 +266,72 @@ export async function getJob(jobId: string): Promise<GetJobResponse> {
 export async function cancelJob(jobId: string): Promise<{ status: string }> {
   return fetchAPI(`/api/v1/jobs/${jobId}/cancel`, {
     method: "POST",
+  });
+}
+
+// ============ Settings API ============
+
+export interface APISettings {
+  cosmos_api_key: string;
+  cosmos_api_key_masked?: string;
+  has_api_key?: boolean;
+  predict_endpoint: string;
+  transfer_endpoint: string;
+  reason_endpoint: string;
+  timeout: number;
+  max_retries: number;
+  retry_backoff: number;
+}
+
+export interface OutputSettings {
+  output_directory: string;
+  create_dated_folders: boolean;
+  save_rejected_videos: boolean;
+  save_intermediate_files: boolean;
+  naming_prefix: string;
+  naming_suffix: string;
+  codec: "h264" | "h265" | "vp9";
+  quality: "low" | "medium" | "high";
+  remove_audio: boolean;
+}
+
+export interface DefaultsSettings {
+  predict: Record<string, unknown>;
+  transfer: Record<string, unknown>;
+  reason: Record<string, unknown>;
+  use_random_seed: boolean;
+}
+
+export interface AppSettings {
+  api: APISettings;
+  output: OutputSettings;
+  defaults: DefaultsSettings;
+}
+
+export interface GetSettingsResponse {
+  settings: AppSettings;
+}
+
+export interface SaveSettingsResponse {
+  settings: AppSettings;
+  success: boolean;
+}
+
+/**
+ * Get current app settings
+ */
+export async function getSettings(): Promise<GetSettingsResponse> {
+  return fetchAPI("/api/v1/settings");
+}
+
+/**
+ * Save app settings
+ */
+export async function saveSettings(
+  settings: Partial<AppSettings>
+): Promise<SaveSettingsResponse> {
+  return fetchAPI("/api/v1/settings", {
+    method: "PUT",
+    body: JSON.stringify(settings),
   });
 }

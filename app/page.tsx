@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { RequestCard } from "@/components/RequestCard";
 import { ProgressMonitor } from "@/components/ProgressMonitor";
-import { mockRequests } from "@/lib/mock-data";
 import { listRequests, checkAPIHealth } from "@/lib/api";
 import { Request, RequestStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -17,9 +16,10 @@ import {
 } from "@/components/ui/select";
 
 export default function HomePage() {
-  const [requests, setRequests] = useState<Request[]>(mockRequests);
+  const [requests, setRequests] = useState<Request[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [apiConnected, setApiConnected] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -33,12 +33,15 @@ export default function HomePage() {
 
         if (isHealthy) {
           const response = await listRequests({ limit: 100 });
-          if (response.requests.length > 0) {
-            setRequests(response.requests);
-          }
+          setRequests(response.requests);
+        } else {
+          setRequests([]);
+          setErrorMessage("API server is not available. Please start the server.");
         }
       } catch (error) {
-        console.warn("Using mock data:", error);
+        console.error("Failed to fetch requests:", error);
+        setRequests([]);
+        setErrorMessage("Failed to fetch requests. Please check API connection.");
       } finally {
         setIsLoading(false);
       }
@@ -84,15 +87,15 @@ export default function HomePage() {
                 className={`text-xs px-2 py-0.5 rounded ${
                   apiConnected
                     ? "bg-success/10 text-success"
-                    : "bg-muted text-muted-foreground"
+                    : "bg-error/10 text-error"
                 }`}
               >
-                {apiConnected ? "API Connected" : "Demo Mode"}
+                {apiConnected ? "API Connected" : "API Disconnected"}
               </span>
             )}
           </div>
           <Link href="/new">
-            <Button>+ New Job</Button>
+            <Button>+ New Request</Button>
           </Link>
         </div>
         <p className="text-muted-foreground">
@@ -181,9 +184,18 @@ export default function HomePage() {
             ))
           ) : (
             <div className="text-center py-12 text-muted-foreground">
-              <p>No requests found</p>
-              {(statusFilter !== "all" || searchQuery) && (
-                <p className="text-sm mt-1">Try adjusting your filters</p>
+              {errorMessage ? (
+                <>
+                  <p className="text-error">{errorMessage}</p>
+                  <p className="text-sm mt-2">Run: <code className="bg-secondary px-2 py-1 rounded">uv run python -m server.main</code></p>
+                </>
+              ) : (
+                <>
+                  <p>No requests found</p>
+                  {(statusFilter !== "all" || searchQuery) && (
+                    <p className="text-sm mt-1">Try adjusting your filters</p>
+                  )}
+                </>
               )}
             </div>
           )}
