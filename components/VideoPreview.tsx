@@ -8,6 +8,7 @@ interface VideoPreviewProps {
   title?: string;
   className?: string;
   autoPlay?: boolean;
+  autoPlayOnVisible?: boolean; // 뷰포트에 보일 때 자동재생
   loop?: boolean;
   muted?: boolean;
   controls?: boolean;
@@ -21,6 +22,7 @@ export const VideoPreview = forwardRef<HTMLVideoElement, VideoPreviewProps>(
       title,
       className = "",
       autoPlay = false,
+      autoPlayOnVisible = false,
       loop = true,
       muted = true,
       controls = true,
@@ -29,6 +31,7 @@ export const VideoPreview = forwardRef<HTMLVideoElement, VideoPreviewProps>(
     ref
   ) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Expose the video element via ref
   useImperativeHandle(ref, () => videoRef.current as HTMLVideoElement);
@@ -36,6 +39,37 @@ export const VideoPreview = forwardRef<HTMLVideoElement, VideoPreviewProps>(
   const [error, setError] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+
+  // Intersection Observer for viewport-based autoplay
+  useEffect(() => {
+    if (!autoPlayOnVisible || !containerRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (videoRef.current) {
+            if (entry.isIntersecting) {
+              videoRef.current.play().catch(() => {
+                // Autoplay was prevented, ignore silently
+              });
+            } else {
+              videoRef.current.pause();
+            }
+          }
+        });
+      },
+      {
+        threshold: 0.3, // 30% 이상 보일 때 재생
+        rootMargin: "50px", // 약간의 여유
+      }
+    );
+
+    observer.observe(containerRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [autoPlayOnVisible]);
 
   // Sync playback with another video
   useEffect(() => {
@@ -97,7 +131,7 @@ export const VideoPreview = forwardRef<HTMLVideoElement, VideoPreviewProps>(
   const videoSrc = getVideoUrl(src);
 
   return (
-    <div className={`relative rounded-lg overflow-hidden bg-black ${className}`}>
+    <div ref={containerRef} className={`relative rounded-lg overflow-hidden bg-black ${className}`}>
       {/* Title overlay */}
       {title && (
         <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/70 to-transparent p-3">

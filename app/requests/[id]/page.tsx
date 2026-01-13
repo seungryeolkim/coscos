@@ -375,7 +375,7 @@ function InputDetailView({
             <div>
               <div className="text-sm text-muted-foreground mb-2">RGB Video</div>
               <div className="aspect-video">
-                <VideoPreview src={input.rgbPath} title="Original" className="w-full h-full" />
+                <VideoPreview src={input.rgbPath} title="Original" autoPlayOnVisible={true} className="w-full h-full" />
               </div>
               <div className="mt-2 text-xs text-muted-foreground truncate">{input.rgbFilename}</div>
             </div>
@@ -391,6 +391,7 @@ function InputDetailView({
                   <VideoPreview
                     src={input.controlPath}
                     title={input.controlType || "Control"}
+                    autoPlayOnVisible={true}
                     className="w-full h-full"
                   />
                 </div>

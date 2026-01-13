@@ -29,7 +29,7 @@ export function VariantCard({ variant, onSelect, isSelected }: VariantCardProps)
         {hasOutput ? (
           <VideoPreview
             src={variant.outputPath!}
-            autoPlay={false}
+            autoPlayOnVisible={true}
             controls={false}
             className="w-full h-full"
           />
