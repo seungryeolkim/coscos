@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { JobProgressView } from "@/components/JobProgressView";
 
 export default function RequestDetailPage() {
   const params = useParams();
@@ -164,40 +165,55 @@ export default function RequestDetailPage() {
         </div>
       </div>
 
-      {/* Main content: Sidebar + Detail */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* Left sidebar - Input list (independent scroll) */}
-        <div className="w-72 border-r border-border overflow-y-auto overscroll-contain shrink-0">
-          <div className="p-4">
-            <h2 className="text-sm font-medium text-muted-foreground mb-3">Input Videos</h2>
-            <div className="space-y-2">
-              {request.inputs.map((input) => (
-                <InputListItem
-                  key={input.id}
-                  input={input}
-                  isSelected={selectedInput?.id === input.id}
-                  onClick={() => setSelectedInputId(input.id)}
-                />
-              ))}
+      {/* Main content: Different view based on status */}
+      {request.status === "running" ? (
+        /* Progress View for running jobs */
+        <div className="flex-1 overflow-y-auto overscroll-contain p-6">
+          <JobProgressView
+            jobId={request.jobId || request.id}
+            requestName={request.name}
+            onComplete={() => {
+              // Refresh data when job completes
+              window.location.reload();
+            }}
+          />
+        </div>
+      ) : (
+        /* Normal view: Sidebar + Detail */
+        <div className="flex-1 flex overflow-hidden min-h-0">
+          {/* Left sidebar - Input list (independent scroll) */}
+          <div className="w-72 border-r border-border overflow-y-auto overscroll-contain shrink-0">
+            <div className="p-4">
+              <h2 className="text-sm font-medium text-muted-foreground mb-3">Input Videos</h2>
+              <div className="space-y-2">
+                {request.inputs.map((input) => (
+                  <InputListItem
+                    key={input.id}
+                    input={input}
+                    isSelected={selectedInput?.id === input.id}
+                    onClick={() => setSelectedInputId(input.id)}
+                  />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Right content - Selected input detail (independent scroll) */}
-        <div className="flex-1 overflow-y-auto overscroll-contain p-6">
-          {selectedInput ? (
-            <InputDetailView
-              input={selectedInput}
-              config={request.config}
-              onCompare={handleCompare}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              Select an input from the list
-            </div>
-          )}
+          {/* Right content - Selected input detail (independent scroll) */}
+          <div className="flex-1 overflow-y-auto overscroll-contain p-6">
+            {selectedInput ? (
+              <InputDetailView
+                input={selectedInput}
+                config={request.config}
+                onCompare={handleCompare}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Select an input from the list
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Compare dialog */}
       {selectedInput && (

@@ -46,6 +46,147 @@ export interface FileProgressState {
   error?: string;
 }
 
+// ============ Detailed Job Progress Types (for Progress View) ============
+
+export type JobProgressStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+
+export interface JobProgress {
+  job_id: string;
+  job_name: string;
+  status: JobProgressStatus;
+
+  // Timing
+  started_at: string | null;
+  updated_at: string;
+  elapsed_seconds: number;
+  estimated_total_seconds: number | null;
+  estimated_remaining_seconds: number | null;
+
+  // Overall Progress
+  total_videos: number;
+  completed_videos: number;
+  failed_videos: number;
+  current_video_index: number;
+  overall_percent: number;
+
+  // Current Video Progress
+  current_video: {
+    filename: string;
+    stage: PipelineStage;
+    stage_progress: {
+      current_variant: number;
+      total_variants: number;
+      percent: number;
+    };
+    stage_started_at: string;
+    stage_elapsed_seconds: number;
+  } | null;
+
+  // Pipeline Definition
+  pipeline_stages: Array<{
+    type: PipelineStage;
+    status: "pending" | "running" | "completed" | "skipped" | "failed";
+    duration_seconds: number | null;
+  }>;
+
+  // Video Queue
+  videos: Array<{
+    filename: string;
+    status: "pending" | "running" | "completed" | "failed";
+    duration_seconds: number | null;
+    physics_score: number | null;
+    error: string | null;
+    stages: Array<{
+      type: string;
+      status: string;
+      duration_seconds: number | null;
+    }>;
+  }>;
+
+  // Statistics
+  stats: {
+    avg_time_per_video: number | null;
+    success_rate: number;
+    avg_physics_score: number | null;
+  };
+
+  // Logs (optional)
+  recent_logs: Array<{
+    timestamp: string;
+    level: "info" | "warning" | "error";
+    message: string;
+  }>;
+}
+
+// SSE Event types for real-time updates
+export type SSEProgressEvent =
+  | { type: "progress"; data: JobProgress }
+  | { type: "stage_change"; data: { video: string; stage: string } }
+  | { type: "video_complete"; data: { video: string; score: number } }
+  | { type: "video_failed"; data: { video: string; error: string } }
+  | { type: "job_complete"; data: JobProgress }
+  | { type: "log"; data: { timestamp: string; level: string; message: string } };
+
+// Helper functions for progress calculations
+export function calculateETA(progress: JobProgress): number {
+  if (progress.completed_videos === 0) {
+    // No completed videos yet, use default estimate (3 min per video)
+    return (progress.total_videos - progress.current_video_index) * 180;
+  }
+
+  // Average time per completed video
+  const avgTime = progress.elapsed_seconds / progress.completed_videos;
+
+  // Remaining videos
+  const remaining = progress.total_videos - progress.completed_videos;
+
+  // Estimate current video remaining time
+  let currentRemaining = 0;
+  if (progress.current_video) {
+    const currentProgress = progress.current_video.stage_progress.percent;
+    currentRemaining = avgTime * (1 - currentProgress / 100);
+  }
+
+  return Math.round(currentRemaining + remaining * avgTime);
+}
+
+export function calculateOverallProgress(progress: JobProgress): number {
+  if (progress.total_videos === 0) return 0;
+
+  const completedRatio = progress.completed_videos / progress.total_videos;
+
+  let currentContribution = 0;
+  if (progress.current_video) {
+    const currentProgress = progress.current_video.stage_progress.percent / 100;
+    currentContribution = currentProgress / progress.total_videos;
+  }
+
+  return (completedRatio + currentContribution) * 100;
+}
+
+// Video status icon helper
+export function getVideoStatusIcon(status: string): string {
+  switch (status) {
+    case "completed": return "✓";
+    case "running": return "⟳";
+    case "failed": return "✗";
+    case "pending":
+    default: return "○";
+  }
+}
+
+// Stage status color helper
+export function getStageStatusColor(status: string): string {
+  switch (status) {
+    case "completed": return "text-green-500 bg-green-500/10";
+    case "running": return "text-yellow-500 bg-yellow-500/10";
+    case "failed": return "text-red-500 bg-red-500/10";
+    case "skipped": return "text-gray-400 bg-gray-400/10";
+    case "pending":
+    default: return "text-gray-500 bg-gray-500/10";
+  }
+}
+
 // Stage configuration for UI
 export const STAGE_CONFIG: Record<
   PipelineStage,
