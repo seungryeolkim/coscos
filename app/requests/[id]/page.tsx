@@ -174,10 +174,6 @@ export default function RequestDetailPage() {
           <JobProgressView
             jobId={request.jobId || request.id}
             requestName={request.name}
-            onComplete={() => {
-              // Refresh data when job completes
-              window.location.reload();
-            }}
           />
         </div>
       ) : (
