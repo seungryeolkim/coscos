@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ import {
   formatDuration,
   calculateETA,
 } from "@/lib/types";
-import { getProgress, subscribeToProgress } from "@/lib/api";
 
 interface JobProgressViewProps {
   jobId?: string;
@@ -87,25 +86,17 @@ export function JobProgressView({
 }: JobProgressViewProps) {
   const [progress, setProgress] = useState<JobProgress | null>(null);
   const [showLogs, setShowLogs] = useState(false);
-  const useMockDataRef = useRef(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const initializedRef = useRef(false);
 
   // Memoize onComplete to avoid re-renders
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
-  // Initialize with mock data immediately to avoid flickering
+  // Initialize with mock data
   useEffect(() => {
-    // Set initial mock data immediately
     setProgress(getMockProgress(jobId || "demo-job", requestName));
-  }, [jobId, requestName]);
 
-  // Start mock simulation separately (only once)
-  useEffect(() => {
-    // Prevent double initialization
-    if (intervalRef.current) return;
-
+    // Simulate progress updates
     intervalRef.current = setInterval(() => {
       setProgress((prev) => {
         if (!prev) return prev;
@@ -137,10 +128,9 @@ export function JobProgressView({
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
-        intervalRef.current = null;
       }
     };
-  }, []);
+  }, [jobId, requestName]);
 
   if (!progress) {
     return (
