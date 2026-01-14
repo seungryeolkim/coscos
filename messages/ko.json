@@ -11,6 +11,7 @@
   },
   "home": {
     "title": "Requests",
+    "subtitle": "Transfer augmentation requests 및 결과물",
     "newRequest": "New Request",
     "apiConnected": "API Connected",
     "apiDisconnected": "API Disconnected",
@@ -23,11 +24,14 @@
     "empty": "Request가 없습니다. 새 Request를 생성해보세요!",
     "createFirst": "Create Your First Request",
     "loading": "Requests 불러오는 중...",
-    "error": "API 서버에 연결할 수 없습니다"
+    "error": "API 서버에 연결할 수 없습니다",
+    "searchPlaceholder": "파일명으로 검색...",
+    "clearFilters": "필터 초기화",
+    "adjustFilters": "필터를 조정해보세요"
   },
   "new": {
     "title": "New Request",
-    "subtitle": "Build your custom Cosmos pipeline",
+    "subtitle": "Custom Cosmos Pipeline을 구성하세요",
     "selectVideos": "1. Select Videos",
     "buildWorkflow": "2. Build Workflow",
     "requestSettings": "3. Request Settings",
@@ -47,7 +51,14 @@
     "createAnother": "Create Another Request",
     "requestId": "Request ID",
     "mode": "Mode",
-    "videos": "video(s)"
+    "videos": "video(s)",
+    "directoryPlaceholder": "디렉토리 경로 입력...",
+    "browseFailed": "디렉토리 탐색 실패",
+    "selectAtLeastOne": "최소 하나의 비디오를 선택하세요",
+    "invalidWorkflow": "유효하지 않은 Workflow",
+    "createFailed": "Job 생성 실패",
+    "videoCountStatus": "{total}개 비디오, {selected}개 선택됨",
+    "videoSelected": "{count}개 비디오 선택됨"
   },
   "detail": {
     "backToRequests": "Back to Requests",

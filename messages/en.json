@@ -11,6 +11,7 @@
   },
   "home": {
     "title": "Requests",
+    "subtitle": "Transfer augmentation requests and their outputs",
     "newRequest": "New Request",
     "apiConnected": "API Connected",
     "apiDisconnected": "API Disconnected",
@@ -23,7 +24,10 @@
     "empty": "No requests. Create a new request!",
     "createFirst": "Create Your First Request",
     "loading": "Loading requests...",
-    "error": "Cannot connect to API server"
+    "error": "Cannot connect to API server",
+    "searchPlaceholder": "Search by filename...",
+    "clearFilters": "Clear filters",
+    "adjustFilters": "Try adjusting your filters"
   },
   "new": {
     "title": "New Request",
@@ -47,7 +51,14 @@
     "createAnother": "Create Another Request",
     "requestId": "Request ID",
     "mode": "Mode",
-    "videos": "video(s)"
+    "videos": "video(s)",
+    "directoryPlaceholder": "Enter directory path...",
+    "browseFailed": "Failed to browse directory",
+    "selectAtLeastOne": "Please select at least one video",
+    "invalidWorkflow": "Invalid workflow",
+    "createFailed": "Failed to create job",
+    "videoCountStatus": "{total} videos, {selected} selected",
+    "videoSelected": "{count} video(s) selected"
   },
   "detail": {
     "backToRequests": "Back to Requests",

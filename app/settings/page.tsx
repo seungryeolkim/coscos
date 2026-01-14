@@ -468,9 +468,9 @@ export default function SettingsPage() {
         {activeTab === "api" && (
         <Card>
           <CardHeader>
-            <CardTitle>API Configuration</CardTitle>
+            <CardTitle>{tApi("title")}</CardTitle>
             <CardDescription>
-              Self-hosted Cosmos 2.5 모델 엔드포인트 설정
+              {tApi("subtitle")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -478,9 +478,9 @@ export default function SettingsPage() {
             <div className="space-y-3 p-4 rounded-lg border bg-gradient-to-r from-cyan-500/5 to-transparent">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-medium text-sm">Cosmos API Key</h4>
+                  <h4 className="font-medium text-sm">{tApi("cosmosApiKey")}</h4>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Self-hosted 서버 인증용 Bearer Token
+                    {tApi("cosmosApiKeyDesc")}
                   </p>
                 </div>
               </div>
@@ -499,18 +499,18 @@ export default function SettingsPage() {
                 />
                 {hasApiKey && (
                   <span className="flex items-center text-xs text-success px-2">
-                    ✓ Saved
+                    ✓ {tApi("saved")}
                   </span>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                비어있으면 기존 키가 유지됩니다. 서버에서 COSMOS_API_KEY가 설정되지 않은 경우 인증을 건너뜁니다 (개발 모드).
+                {tApi("emptyKeepExisting")}
               </p>
             </div>
 
             {/* Endpoint Configuration */}
             <div className="space-y-4">
-              <h4 className="font-medium text-sm">Endpoint URLs</h4>
+              <h4 className="font-medium text-sm">{tApi("endpointUrls")}</h4>
 
               {/* Predict Endpoint */}
               <div className="p-4 rounded-lg border space-y-2">
@@ -525,7 +525,7 @@ export default function SettingsPage() {
                           : "bg-red-500/20 text-red-500"
                       }`}
                     >
-                      {connectionStatus.predict === "success" ? "Connected" : "Failed"}
+                      {connectionStatus.predict === "success" ? tApi("connected") : tApi("failed")}
                     </span>
                   )}
                 </div>
@@ -554,7 +554,7 @@ export default function SettingsPage() {
                           : "bg-red-500/20 text-red-500"
                       }`}
                     >
-                      {connectionStatus.transfer === "success" ? "Connected" : "Failed"}
+                      {connectionStatus.transfer === "success" ? tApi("connected") : tApi("failed")}
                     </span>
                   )}
                 </div>
@@ -583,7 +583,7 @@ export default function SettingsPage() {
                           : "bg-red-500/20 text-red-500"
                       }`}
                     >
-                      {connectionStatus.reason === "success" ? "Connected" : "Failed"}
+                      {connectionStatus.reason === "success" ? tApi("connected") : tApi("failed")}
                     </span>
                   )}
                 </div>
@@ -602,11 +602,11 @@ export default function SettingsPage() {
 
             {/* Connection Settings */}
             <div className="space-y-4">
-              <h4 className="font-medium text-sm">Connection Settings</h4>
+              <h4 className="font-medium text-sm">{tApi("connectionSettings")}</h4>
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
                   <label className="text-sm text-muted-foreground">
-                    Timeout (seconds)
+                    {tApi("timeout")}
                   </label>
                   <Input
                     type="number"
@@ -620,7 +620,7 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">Max Retries</label>
+                  <label className="text-sm text-muted-foreground">{tApi("maxRetries")}</label>
                   <Input
                     type="number"
                     value={apiSettings.maxRetries}
@@ -634,7 +634,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm text-muted-foreground">
-                    Retry Backoff (x)
+                    {tApi("retryBackoff")}
                   </label>
                   <Input
                     type="number"
@@ -656,7 +656,7 @@ export default function SettingsPage() {
               disabled={testingConnections}
               className="w-full sm:w-auto"
             >
-              {testingConnections ? "Testing..." : "Test All Connections"}
+              {testingConnections ? tApi("testing") : tApi("testAll")}
             </Button>
           </CardContent>
         </Card>
@@ -666,15 +666,15 @@ export default function SettingsPage() {
         {activeTab === "output" && (
         <Card>
           <CardHeader>
-            <CardTitle>Output Configuration</CardTitle>
+            <CardTitle>{tOutput("title")}</CardTitle>
             <CardDescription>
-              Configure output directory, file organization, and encoding
+              {tOutput("subtitle")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Output Directory */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Output Directory</label>
+              <label className="text-sm font-medium">{tOutput("directory")}</label>
               <div className="flex gap-2">
                 <Input
                   value={outputSettings.outputDirectory}
@@ -691,7 +691,7 @@ export default function SettingsPage() {
 
             {/* File Organization */}
             <div className="space-y-3">
-              <label className="text-sm font-medium">File Organization</label>
+              <label className="text-sm font-medium">{tOutput("fileOrganization")}</label>
               <div className="space-y-2">
                 <label className="flex items-center gap-2">
                   <Checkbox
@@ -704,7 +704,7 @@ export default function SettingsPage() {
                     }
                   />
                   <span className="text-sm">
-                    Create dated subfolders (output/2026-01-12/)
+                    {tOutput("createDatedFolders")}
                   </span>
                 </label>
                 <label className="flex items-center gap-2">
@@ -717,7 +717,7 @@ export default function SettingsPage() {
                       }))
                     }
                   />
-                  <span className="text-sm">Save rejected videos</span>
+                  <span className="text-sm">{tOutput("saveRejected")}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <Checkbox
@@ -730,7 +730,7 @@ export default function SettingsPage() {
                     }
                   />
                   <span className="text-sm">
-                    Save intermediate files (predict, transfer results)
+                    {tOutput("saveIntermediate")}
                   </span>
                 </label>
               </div>
@@ -738,10 +738,10 @@ export default function SettingsPage() {
 
             {/* Naming Convention */}
             <div className="space-y-3">
-              <label className="text-sm font-medium">Naming Convention</label>
+              <label className="text-sm font-medium">{tOutput("namingConvention")}</label>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">Prefix</label>
+                  <label className="text-sm text-muted-foreground">{tOutput("prefix")}</label>
                   <Input
                     placeholder="(optional)"
                     value={outputSettings.namingPrefix}
@@ -754,7 +754,7 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">Suffix</label>
+                  <label className="text-sm text-muted-foreground">{tOutput("suffix")}</label>
                   <Input
                     value={outputSettings.namingSuffix}
                     onChange={(e) =>
@@ -767,7 +767,7 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="p-3 rounded-lg bg-accent/30">
-                <span className="text-sm text-muted-foreground">Preview: </span>
+                <span className="text-sm text-muted-foreground">{tOutput("preview")}: </span>
                 <code className="text-sm">
                   {outputSettings.namingPrefix}dashcam_city{outputSettings.namingSuffix}
                   _00.mp4
@@ -777,10 +777,10 @@ export default function SettingsPage() {
 
             {/* Video Encoding */}
             <div className="space-y-3">
-              <label className="text-sm font-medium">Video Encoding</label>
+              <label className="text-sm font-medium">{tOutput("videoEncoding")}</label>
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">Codec</label>
+                  <label className="text-sm text-muted-foreground">{tOutput("codec")}</label>
                   <Select
                     value={outputSettings.codec}
                     onValueChange={(value: "h264" | "h265" | "vp9") =>
@@ -798,7 +798,7 @@ export default function SettingsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">Quality</label>
+                  <label className="text-sm text-muted-foreground">{tOutput("quality")}</label>
                   <Select
                     value={outputSettings.quality}
                     onValueChange={(value: "low" | "medium" | "high") =>
@@ -816,7 +816,7 @@ export default function SettingsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">Audio</label>
+                  <label className="text-sm text-muted-foreground">{tOutput("audio")}</label>
                   <Select
                     value={outputSettings.removeAudio ? "remove" : "keep"}
                     onValueChange={(value) =>
@@ -830,8 +830,8 @@ export default function SettingsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="remove">Remove</SelectItem>
-                      <SelectItem value="keep">Keep Original</SelectItem>
+                      <SelectItem value="remove">{tOutput("remove")}</SelectItem>
+                      <SelectItem value="keep">{tOutput("keepOriginal")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -845,18 +845,18 @@ export default function SettingsPage() {
         {activeTab === "defaults" && (
         <Card>
           <CardHeader>
-            <CardTitle>Default Values</CardTitle>
+            <CardTitle>{tDefaults("title")}</CardTitle>
             <CardDescription>
-              Set default parameters for each pipeline mode
+              {tDefaults("subtitle")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Predict Defaults */}
             <div className="space-y-4 p-4 rounded-lg border">
-              <h4 className="font-medium">Predict Defaults</h4>
+              <h4 className="font-medium">{tDefaults("predict")}</h4>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">Resolution</label>
+                  <label className="text-sm text-muted-foreground">{tDefaults("resolution")}</label>
                   <Select
                     value={predictDefaults.resolution}
                     onValueChange={(value: "480p" | "720p") =>
@@ -873,7 +873,7 @@ export default function SettingsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">FPS</label>
+                  <label className="text-sm text-muted-foreground">{tDefaults("fps")}</label>
                   <Select
                     value={String(predictDefaults.fps)}
                     onValueChange={(value) =>
@@ -893,7 +893,7 @@ export default function SettingsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">Model Size</label>
+                  <label className="text-sm text-muted-foreground">{tDefaults("modelSize")}</label>
                   <Select
                     value={predictDefaults.model_size}
                     onValueChange={(value: "2B" | "14B") =>
@@ -911,7 +911,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm text-muted-foreground">
-                    Guidance Scale: {predictDefaults.guidance_scale.toFixed(1)}
+                    {tDefaults("guidanceScale")}: {predictDefaults.guidance_scale.toFixed(1)}
                   </label>
                   <Slider
                     value={[predictDefaults.guidance_scale]}
@@ -929,7 +929,7 @@ export default function SettingsPage() {
             {/* Transfer Defaults with UI/Code Tabs */}
             <div className="space-y-4 p-4 rounded-lg border">
               <div className="flex items-center justify-between">
-                <h4 className="font-medium">Transfer Defaults</h4>
+                <h4 className="font-medium">{tDefaults("transfer")}</h4>
                 <Tabs
                   value={activeTransferTab}
                   onValueChange={handleTransferTabChange}
@@ -952,7 +952,7 @@ export default function SettingsPage() {
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div className="space-y-2">
                       <label className="text-sm text-muted-foreground">
-                        Control Weight Preset
+                        {tDefaults("controlWeightPreset")}
                       </label>
                       <Select
                         defaultValue="0"
@@ -980,7 +980,7 @@ export default function SettingsPage() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm text-muted-foreground">
-                        Inference Steps: {transferDefaults.num_steps}
+                        {tDefaults("inferenceSteps")}: {transferDefaults.num_steps}
                       </label>
                       <Slider
                         value={[transferDefaults.num_steps]}
@@ -994,7 +994,7 @@ export default function SettingsPage() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm text-muted-foreground">
-                        Guidance Scale: {transferDefaults.guidance_scale.toFixed(1)}
+                        {tDefaults("guidanceScale")}: {transferDefaults.guidance_scale.toFixed(1)}
                       </label>
                       <Slider
                         value={[transferDefaults.guidance_scale]}

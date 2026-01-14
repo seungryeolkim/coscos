@@ -82,7 +82,7 @@ export default function NewJobPage() {
       setVideos(response.videos);
       setSelectedVideos(new Set());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to browse directory");
+      setError(err instanceof Error ? err.message : t("browseFailed"));
       setVideos([]);
     } finally {
       setIsLoading(false);
@@ -110,12 +110,12 @@ export default function NewJobPage() {
   // Create and run job
   const handleSubmit = async () => {
     if (selectedVideos.size === 0) {
-      setError("Please select at least one video");
+      setError(t("selectAtLeastOne"));
       return;
     }
 
     if (!workflowValidation.valid) {
-      setError(workflowValidation.error || "Invalid workflow");
+      setError(workflowValidation.error || t("invalidWorkflow"));
       return;
     }
 
@@ -139,7 +139,7 @@ export default function NewJobPage() {
       });
       setRunningJobId(response.job.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create job");
+      setError(err instanceof Error ? err.message : t("createFailed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -276,7 +276,7 @@ export default function NewJobPage() {
                 type="text"
                 value={directoryPath}
                 onChange={(e) => setDirectoryPath(e.target.value)}
-                placeholder="Enter directory path..."
+                placeholder={t("directoryPlaceholder")}
                 className="flex-1"
                 onKeyDown={(e) => e.key === "Enter" && handleBrowse()}
               />
@@ -289,7 +289,7 @@ export default function NewJobPage() {
               <>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-muted-foreground">
-                    {videos.length} videos, {selectedVideos.size} selected
+                    {t("videoCountStatus", { total: videos.length, selected: selectedVideos.size })}
                   </span>
                   <div className="flex gap-2">
                     <Button variant="ghost" size="sm" onClick={selectAll}>
@@ -348,7 +348,7 @@ export default function NewJobPage() {
               <div>
                 <label className="text-sm font-medium mb-1 block">{t("selectedVideos")}</label>
                 <div className="h-10 flex items-center text-sm text-muted-foreground">
-                  {selectedVideos.size} video{selectedVideos.size !== 1 ? "s" : ""} selected
+                  {t("videoSelected", { count: selectedVideos.size })}
                 </div>
               </div>
             </div>

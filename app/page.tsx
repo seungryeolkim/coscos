@@ -103,7 +103,7 @@ export default function HomePage() {
           </Link>
         </div>
         <p className="text-muted-foreground">
-          Transfer augmentation requests and their outputs
+          {t("subtitle")}
         </p>
       </div>
 
@@ -149,7 +149,7 @@ export default function HomePage() {
         <div className="flex-1">
           <input
             type="text"
-            placeholder="Search by filename..."
+            placeholder={t("searchPlaceholder")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full max-w-md px-3 py-2 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -166,7 +166,7 @@ export default function HomePage() {
               setSearchQuery("");
             }}
           >
-            Clear filters
+            {t("clearFilters")}
           </Button>
         )}
       </div>
@@ -197,7 +197,7 @@ export default function HomePage() {
                 <>
                   <p>{t("empty")}</p>
                   {(statusFilter !== "all" || searchQuery) && (
-                    <p className="text-sm mt-1">Try adjusting your filters</p>
+                    <p className="text-sm mt-1">{t("adjustFilters")}</p>
                   )}
                 </>
               )}
