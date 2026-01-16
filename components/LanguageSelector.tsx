@@ -23,7 +23,7 @@ export function LanguageSelector() {
       <SelectTrigger className="w-[100px] h-8 text-sm">
         <SelectValue />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent position="popper" sideOffset={4}>
         {locales.map((loc) => (
           <SelectItem key={loc} value={loc}>
             {localeLabels[loc]}

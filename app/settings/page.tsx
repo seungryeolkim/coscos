@@ -251,10 +251,28 @@ export default function SettingsPage() {
     }
   };
 
+  // Predict JSON Editor state
+  const [predictJsonCode, setPredictJsonCode] = useState("");
+  const [predictJsonError, setPredictJsonError] = useState<string | null>(null);
+  const [activePredictTab, setActivePredictTab] = useState<"ui" | "code">("ui");
+
   // Transfer JSON Editor state
   const [transferJsonCode, setTransferJsonCode] = useState("");
   const [transferJsonError, setTransferJsonError] = useState<string | null>(null);
   const [activeTransferTab, setActiveTransferTab] = useState<"ui" | "code">("ui");
+
+  // Reason JSON Editor state
+  const [reasonJsonCode, setReasonJsonCode] = useState("");
+  const [reasonJsonError, setReasonJsonError] = useState<string | null>(null);
+  const [activeReasonTab, setActiveReasonTab] = useState<"ui" | "code">("ui");
+
+  // Sync Predict UI to JSON when predictDefaults changes
+  useEffect(() => {
+    if (activePredictTab === "ui") {
+      setPredictJsonCode(JSON.stringify(predictDefaults, null, 2));
+      setPredictJsonError(null);
+    }
+  }, [predictDefaults, activePredictTab]);
 
   // Sync Transfer UI to JSON when transferDefaults changes
   useEffect(() => {
@@ -264,7 +282,28 @@ export default function SettingsPage() {
     }
   }, [transferDefaults, activeTransferTab]);
 
-  // Handle JSON code changes
+  // Sync Reason UI to JSON when reasonDefaults changes
+  useEffect(() => {
+    if (activeReasonTab === "ui") {
+      setReasonJsonCode(JSON.stringify(reasonDefaults, null, 2));
+      setReasonJsonError(null);
+    }
+  }, [reasonDefaults, activeReasonTab]);
+
+  // Handle Predict JSON code changes
+  const handlePredictJsonChange = useCallback((code: string) => {
+    setPredictJsonCode(code);
+    try {
+      const parsed = JSON.parse(code);
+      if (typeof parsed === "object" && parsed !== null) {
+        setPredictJsonError(null);
+      }
+    } catch {
+      setPredictJsonError("Invalid JSON syntax");
+    }
+  }, []);
+
+  // Handle Transfer JSON code changes
   const handleTransferJsonChange = useCallback((code: string) => {
     setTransferJsonCode(code);
     try {
@@ -278,7 +317,50 @@ export default function SettingsPage() {
     }
   }, []);
 
-  // Apply JSON to UI state
+  // Handle Reason JSON code changes
+  const handleReasonJsonChange = useCallback((code: string) => {
+    setReasonJsonCode(code);
+    try {
+      const parsed = JSON.parse(code);
+      if (typeof parsed === "object" && parsed !== null) {
+        setReasonJsonError(null);
+      }
+    } catch {
+      setReasonJsonError("Invalid JSON syntax");
+    }
+  }, []);
+
+  // Apply Predict JSON to UI state
+  const applyPredictJson = useCallback(() => {
+    try {
+      const parsed = JSON.parse(predictJsonCode);
+      const merged = {
+        ...DEFAULT_PREDICT_PARAMS,
+        ...parsed,
+      };
+      setPredictDefaults(merged);
+      setPredictJsonError(null);
+      return true;
+    } catch (e) {
+      setPredictJsonError("Invalid JSON: " + (e as Error).message);
+      return false;
+    }
+  }, [predictJsonCode]);
+
+  // Handle Predict tab change
+  const handlePredictTabChange = useCallback(
+    (value: string) => {
+      if (value === "ui" && activePredictTab === "code") {
+        if (!applyPredictJson()) {
+          return;
+        }
+      }
+      setActivePredictTab(value as "ui" | "code");
+    },
+    [activePredictTab, applyPredictJson]
+  );
+
+  // Apply Transfer JSON to UI state
   const applyTransferJson = useCallback(() => {
     try {
       const parsed = JSON.parse(transferJsonCode);
@@ -300,7 +382,7 @@ export default function SettingsPage() {
     }
   }, [transferJsonCode]);
 
-  // Handle tab change
+  // Handle Transfer tab change
   const handleTransferTabChange = useCallback(
     (value: string) => {
       if (value === "ui" && activeTransferTab === "code") {
@@ -313,6 +395,36 @@ export default function SettingsPage() {
       setActiveTransferTab(value as "ui" | "code");
     },
     [activeTransferTab, applyTransferJson]
+  );
+
+  // Apply Reason JSON to UI state
+  const applyReasonJson = useCallback(() => {
+    try {
+      const parsed = JSON.parse(reasonJsonCode);
+      const merged = {
+        ...DEFAULT_REASON_PARAMS,
+        ...parsed,
+      };
+      setReasonDefaults(merged);
+      setReasonJsonError(null);
+      return true;
+    } catch (e) {
+      setReasonJsonError("Invalid JSON: " + (e as Error).message);
+      return false;
+    }
+  }, [reasonJsonCode]);
+
+  // Handle Reason tab change
+  const handleReasonTabChange = useCallback(
+    (value: string) => {
+      if (value === "ui" && activeReasonTab === "code") {
+        if (!applyReasonJson()) {
+          return;
+        }
+      }
+      setActiveReasonTab(value as "ui" | "code");
+    },
+    [activeReasonTab, applyReasonJson]
   );
 
   // Custom Styles state
@@ -851,79 +963,160 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Predict Defaults */}
+            {/* Predict Defaults with UI/Code Tabs */}
             <div className="space-y-4 p-4 rounded-lg border">
-              <h4 className="font-medium">{tDefaults("predict")}</h4>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">{tDefaults("resolution")}</label>
-                  <Select
-                    value={predictDefaults.resolution}
-                    onValueChange={(value: "480p" | "720p") =>
-                      setPredictDefaults((prev) => ({ ...prev, resolution: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="480p">480p</SelectItem>
-                      <SelectItem value="720p">720p</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">{tDefaults("fps")}</label>
-                  <Select
-                    value={String(predictDefaults.fps)}
-                    onValueChange={(value) =>
-                      setPredictDefaults((prev) => ({
-                        ...prev,
-                        fps: parseInt(value) as 10 | 16,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10 FPS</SelectItem>
-                      <SelectItem value="16">16 FPS</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">{tDefaults("modelSize")}</label>
-                  <Select
-                    value={predictDefaults.model_size}
-                    onValueChange={(value: "2B" | "14B") =>
-                      setPredictDefaults((prev) => ({ ...prev, model_size: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2B">2B (Faster)</SelectItem>
-                      <SelectItem value="14B">14B (Better Quality)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">
-                    {tDefaults("guidanceScale")}: {predictDefaults.guidance_scale.toFixed(1)}
-                  </label>
-                  <Slider
-                    value={[predictDefaults.guidance_scale]}
-                    min={1}
-                    max={15}
-                    step={0.5}
-                    onValueChange={([value]) =>
-                      setPredictDefaults((prev) => ({ ...prev, guidance_scale: value }))
-                    }
-                  />
-                </div>
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium">{tDefaults("predict")}</h4>
+                <Tabs
+                  value={activePredictTab}
+                  onValueChange={handlePredictTabChange}
+                  className="w-auto"
+                >
+                  <TabsList className="h-8">
+                    <TabsTrigger value="ui" className="text-xs px-3">
+                      UI
+                    </TabsTrigger>
+                    <TabsTrigger value="code" className="text-xs px-3">
+                      JSON
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
+
+              {/* UI Mode */}
+              {activePredictTab === "ui" && (
+                <div className="space-y-4">
+                  {/* Default Prompt */}
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">{tDefaults("defaultPrompt")}</label>
+                    <Textarea
+                      value={predictDefaults.prompts?.[0] || ""}
+                      onChange={(e) =>
+                        setPredictDefaults((prev) => ({
+                          ...prev,
+                          prompts: [e.target.value, ...(prev.prompts?.slice(1) || [])],
+                        }))
+                      }
+                      placeholder="Continue this video naturally with realistic physics..."
+                      className="min-h-[80px] resize-none"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {tDefaults("promptHint")}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">{tDefaults("resolution")}</label>
+                      <Select
+                        value={predictDefaults.resolution}
+                        onValueChange={(value) =>
+                          setPredictDefaults((prev) => ({ ...prev, resolution: value as any }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="720,1280">720p (16:9)</SelectItem>
+                          <SelectItem value="720,960">720p (4:3)</SelectItem>
+                          <SelectItem value="480,854">480p (16:9)</SelectItem>
+                          <SelectItem value="480,640">480p (4:3)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">{tDefaults("fps")}</label>
+                      <Select
+                        value={String(predictDefaults.fps)}
+                        onValueChange={(value) =>
+                          setPredictDefaults((prev) => ({
+                            ...prev,
+                            fps: parseInt(value) as 10 | 16,
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10">10 FPS</SelectItem>
+                          <SelectItem value="16">16 FPS</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">Steps</label>
+                      <Select
+                        value={String(predictDefaults.num_steps || 35)}
+                        onValueChange={(value) =>
+                          setPredictDefaults((prev) => ({ ...prev, num_steps: parseInt(value) }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="20">20 (Fast)</SelectItem>
+                          <SelectItem value="35">35 (Default)</SelectItem>
+                          <SelectItem value="50">50 (Quality)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">
+                        {tDefaults("guidanceScale")}: {predictDefaults.guidance.toFixed(1)}
+                      </label>
+                      <Slider
+                        value={[predictDefaults.guidance]}
+                        min={1}
+                        max={10}
+                        step={0.5}
+                        onValueChange={([value]) =>
+                          setPredictDefaults((prev) => ({ ...prev, guidance: value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Code Editor Mode */}
+              {activePredictTab === "code" && (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Textarea
+                      value={predictJsonCode}
+                      onChange={(e) => handlePredictJsonChange(e.target.value)}
+                      className="font-mono text-sm min-h-[300px] bg-zinc-950 text-zinc-100 border-zinc-800"
+                      placeholder="Enter JSON configuration..."
+                      spellCheck={false}
+                    />
+                    {predictJsonError && (
+                      <div className="absolute bottom-2 left-2 right-2 px-3 py-2 bg-red-500/20 border border-red-500/50 rounded text-sm text-red-400">
+                        {predictJsonError}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      {tDefaults("jsonEditNote")}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPredictJsonCode(
+                          JSON.stringify(DEFAULT_PREDICT_PARAMS, null, 2)
+                        );
+                        setPredictJsonError(null);
+                      }}
+                    >
+                      {tDefaults("resetToDefault")}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Transfer Defaults with UI/Code Tabs */}
@@ -994,15 +1187,15 @@ export default function SettingsPage() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm text-muted-foreground">
-                        {tDefaults("guidanceScale")}: {transferDefaults.guidance_scale.toFixed(1)}
+                        {tDefaults("guidanceScale")}: {transferDefaults.guidance.toFixed(1)}
                       </label>
                       <Slider
-                        value={[transferDefaults.guidance_scale]}
+                        value={[transferDefaults.guidance]}
                         min={1}
-                        max={15}
+                        max={10}
                         step={0.5}
                         onValueChange={([value]) =>
-                          setTransferDefaults((prev) => ({ ...prev, guidance_scale: value }))
+                          setTransferDefaults((prev) => ({ ...prev, guidance: value }))
                         }
                       />
                     </div>
@@ -1010,11 +1203,11 @@ export default function SettingsPage() {
 
                   {/* Control Weights Sliders */}
                   <div className="space-y-3 pt-2">
-                    <label className="text-sm font-medium">Control Weights</label>
+                    <label className="text-sm font-medium">{tDefaults("controlWeights")}</label>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <label className="text-sm text-muted-foreground flex justify-between">
-                          <span>Depth (3D Structure)</span>
+                          <span>{tDefaults("depth")}</span>
                           <span>{transferDefaults.control_weights.depth.toFixed(2)}</span>
                         </label>
                         <Slider
@@ -1032,7 +1225,7 @@ export default function SettingsPage() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm text-muted-foreground flex justify-between">
-                          <span>Edge (Outline)</span>
+                          <span>{tDefaults("edge")}</span>
                           <span>{transferDefaults.control_weights.edge.toFixed(2)}</span>
                         </label>
                         <Slider
@@ -1050,7 +1243,7 @@ export default function SettingsPage() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm text-muted-foreground flex justify-between">
-                          <span>Seg (Object Transform)</span>
+                          <span>{tDefaults("seg")}</span>
                           <span>{transferDefaults.control_weights.seg.toFixed(2)}</span>
                         </label>
                         <Slider
@@ -1068,7 +1261,7 @@ export default function SettingsPage() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm text-muted-foreground flex justify-between">
-                          <span>Vis (Visual Consistency)</span>
+                          <span>{tDefaults("vis")}</span>
                           <span>{transferDefaults.control_weights.vis.toFixed(2)}</span>
                         </label>
                         <Slider
@@ -1100,7 +1293,7 @@ export default function SettingsPage() {
                         transferDefaults.control_weights.vis >
                       1 ? (
                         <span className="text-yellow-500 ml-2">
-                          (Will be auto-normalized)
+                          {tDefaults("autoNormalized")}
                         </span>
                       ) : (
                         <span className="text-green-500 ml-2">OK</span>
@@ -1129,9 +1322,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>
-                      Edit the JSON directly to configure Transfer parameters.
-                      Changes will be validated and applied when switching to UI
-                      mode.
+                      {tDefaults("jsonEditNote")}
                     </span>
                     <Button
                       variant="outline"
@@ -1143,71 +1334,128 @@ export default function SettingsPage() {
                         setTransferJsonError(null);
                       }}
                     >
-                      Reset to Default
+                      {tDefaults("resetToDefault")}
                     </Button>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Reason Defaults */}
+            {/* Reason Defaults with UI/Code Tabs */}
             <div className="space-y-4 p-4 rounded-lg border">
-              <h4 className="font-medium">Reason Defaults</h4>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">
-                    Threshold: {reasonDefaults.threshold.toFixed(2)}
-                  </label>
-                  <Slider
-                    value={[reasonDefaults.threshold]}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    onValueChange={([value]) =>
-                      setReasonDefaults((prev) => ({ ...prev, threshold: value }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">Model Size</label>
-                  <Select
-                    value={reasonDefaults.model_size}
-                    onValueChange={(value: "2B" | "8B") =>
-                      setReasonDefaults((prev) => ({ ...prev, model_size: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2B">2B (Faster)</SelectItem>
-                      <SelectItem value="8B">8B (More Accurate)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">
-                    Video Sample FPS: {reasonDefaults.video_fps}
-                  </label>
-                  <Slider
-                    value={[reasonDefaults.video_fps]}
-                    min={1}
-                    max={8}
-                    step={1}
-                    onValueChange={([value]) =>
-                      setReasonDefaults((prev) => ({ ...prev, video_fps: value }))
-                    }
-                  />
-                </div>
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium">{tDefaults("reason")}</h4>
+                <Tabs
+                  value={activeReasonTab}
+                  onValueChange={handleReasonTabChange}
+                  className="w-auto"
+                >
+                  <TabsList className="h-8">
+                    <TabsTrigger value="ui" className="text-xs px-3">
+                      UI
+                    </TabsTrigger>
+                    <TabsTrigger value="code" className="text-xs px-3">
+                      JSON
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
+
+              {/* UI Mode */}
+              {activeReasonTab === "ui" && (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">
+                      {tDefaults("threshold")}: {reasonDefaults.threshold.toFixed(2)}
+                    </label>
+                    <Slider
+                      value={[reasonDefaults.threshold]}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onValueChange={([value]) =>
+                        setReasonDefaults((prev) => ({ ...prev, threshold: value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">{tDefaults("modelSize")}</label>
+                    <Select
+                      value={reasonDefaults.model_size}
+                      onValueChange={(value: "2B" | "8B") =>
+                        setReasonDefaults((prev) => ({ ...prev, model_size: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2B">2B (Faster)</SelectItem>
+                        <SelectItem value="8B">8B (More Accurate)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">
+                      {tDefaults("videoSampleFps")}: {reasonDefaults.video_fps}
+                    </label>
+                    <Slider
+                      value={[reasonDefaults.video_fps]}
+                      min={1}
+                      max={8}
+                      step={1}
+                      onValueChange={([value]) =>
+                        setReasonDefaults((prev) => ({ ...prev, video_fps: value }))
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Code Editor Mode */}
+              {activeReasonTab === "code" && (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Textarea
+                      value={reasonJsonCode}
+                      onChange={(e) => handleReasonJsonChange(e.target.value)}
+                      className="font-mono text-sm min-h-[200px] bg-zinc-950 text-zinc-100 border-zinc-800"
+                      placeholder="Enter JSON configuration..."
+                      spellCheck={false}
+                    />
+                    {reasonJsonError && (
+                      <div className="absolute bottom-2 left-2 right-2 px-3 py-2 bg-red-500/20 border border-red-500/50 rounded text-sm text-red-400">
+                        {reasonJsonError}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      {tDefaults("jsonEditNote")}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setReasonJsonCode(
+                          JSON.stringify(DEFAULT_REASON_PARAMS, null, 2)
+                        );
+                        setReasonJsonError(null);
+                      }}
+                    >
+                      {tDefaults("resetToDefault")}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Common Settings */}
             <div className="space-y-4 p-4 rounded-lg border">
-              <h4 className="font-medium">Common</h4>
+              <h4 className="font-medium">{tDefaults("common")}</h4>
               <div className="flex flex-wrap items-center gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground">Default Seed</label>
+                  <label className="text-sm text-muted-foreground">{tDefaults("defaultSeed")}</label>
                   <Input
                     type="number"
                     value={predictDefaults.seed}
@@ -1225,13 +1473,13 @@ export default function SettingsPage() {
                     checked={useRandomSeed}
                     onCheckedChange={(checked) => setUseRandomSeed(checked as boolean)}
                   />
-                  <span className="text-sm">Random seed for each job</span>
+                  <span className="text-sm">{tDefaults("randomSeed")}</span>
                 </label>
               </div>
             </div>
 
             <Button variant="outline" onClick={resetDefaults}>
-              Reset All to Factory Defaults
+              {tDefaults("resetFactory")}
             </Button>
           </CardContent>
         </Card>
@@ -1241,16 +1489,16 @@ export default function SettingsPage() {
         {activeTab === "profiles" && (
         <Card>
           <CardHeader>
-            <CardTitle>Profiles (프로필)</CardTitle>
+            <CardTitle>{tProfiles("title")}</CardTitle>
             <CardDescription>
-              워크플로우 프로필 관리 - New Job에서 생성한 프로필이 여기에 표시됩니다
+              {tProfiles("subtitle")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Built-in Profiles */}
             <div className="space-y-3">
               <h4 className="font-medium text-sm text-muted-foreground">
-                Built-in Profiles ({DEFAULT_PROFILES.length})
+                {tProfiles("builtIn")} ({DEFAULT_PROFILES.length})
               </h4>
               <div className="grid gap-2">
                 {DEFAULT_PROFILES.map((profile) => (
@@ -1277,11 +1525,11 @@ export default function SettingsPage() {
             {/* Custom Profiles */}
             <div className="space-y-3">
               <h4 className="font-medium text-sm text-muted-foreground">
-                Custom Profiles ({customProfiles.length})
+                {tProfiles("custom")} ({customProfiles.length})
               </h4>
               {customProfiles.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center border rounded-lg">
-                  아직 커스텀 프로필이 없습니다. New Job에서 워크플로우를 저장하면 여기에 표시됩니다.
+                  {tProfiles("noCustom")}
                 </p>
               ) : (
                 <div className="grid gap-2">
@@ -1303,7 +1551,7 @@ export default function SettingsPage() {
                           onClick={() => deleteCustomProfile(profile.id)}
                           className="text-destructive hover:text-destructive"
                         >
-                          Delete
+                          {tProfiles("delete")}
                         </Button>
                       </div>
                     </div>
@@ -1315,11 +1563,11 @@ export default function SettingsPage() {
             {/* Import/Export */}
             <div className="flex gap-2 pt-4 border-t">
               <Button variant="outline" onClick={exportProfiles}>
-                Export All
+                {tProfiles("exportAll")}
               </Button>
               <label>
                 <Button variant="outline" asChild>
-                  <span>Import</span>
+                  <span>{tProfiles("import")}</span>
                 </Button>
                 <input
                   type="file"
@@ -1337,9 +1585,9 @@ export default function SettingsPage() {
         {activeTab === "styles" && (
         <Card>
           <CardHeader>
-            <CardTitle>Style Prompts Library</CardTitle>
+            <CardTitle>{tStyles("title")}</CardTitle>
             <CardDescription>
-              NVIDIA Cosmos Transfer 권장 스타일 프롬프트 ({TRANSFER_STYLES.length}개)
+              {tStyles("subtitle")} ({TRANSFER_STYLES.length})
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -1366,7 +1614,7 @@ export default function SettingsPage() {
                           </p>
                         </div>
                         <Button variant="outline" size="sm" className="shrink-0">
-                          Duplicate
+                          {tStyles("duplicate")}
                         </Button>
                       </div>
                     </div>
@@ -1378,11 +1626,11 @@ export default function SettingsPage() {
             {/* Custom Styles */}
             <div className="space-y-3">
               <h4 className="font-medium text-sm text-muted-foreground">
-                Custom Styles
+                {tStyles("customStyles")}
               </h4>
               {customStyles.filter((s) => !s.isBuiltIn).length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">
-                  No custom styles yet. Click below to add one.
+                  {tStyles("noCustom")}
                 </p>
               ) : (
                 customStyles
@@ -1398,14 +1646,14 @@ export default function SettingsPage() {
                         </div>
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm">
-                            Edit
+                            {tStyles("edit")}
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => deleteCustomStyle(style.id)}
                           >
-                            Delete
+                            {tProfiles("delete")}
                           </Button>
                         </div>
                       </div>
@@ -1415,7 +1663,7 @@ export default function SettingsPage() {
             </div>
 
             <Button variant="outline" onClick={addCustomStyle}>
-              + Add Custom Style
+              {tStyles("addCustom")}
             </Button>
           </CardContent>
         </Card>

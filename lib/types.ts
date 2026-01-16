@@ -263,13 +263,7 @@ export interface PipelineConfig {
   controlWeights: ControlWeights;
   seed: number;
   threshold: number;
-}
-
-export interface ControlWeights {
-  depth: number;
-  edge: number;
-  seg: number;
-  vis: number;
+  save_intermediate?: boolean;
 }
 
 // API response types
@@ -380,11 +374,23 @@ export interface VideoFile {
   path: string;
   size: number;
   modified: string;
+  // Associated prompt file (auto-detected if exists)
+  promptFile?: {
+    name: string;
+    path: string;
+    prompts: string[];  // Each line = one prompt (1:n mapping)
+  };
+}
+
+export interface FolderInfo {
+  name: string;
+  path: string;
 }
 
 export interface BrowseResponse {
   path: string;
   videos: VideoFile[];
+  folders: FolderInfo[];
   count: number;
 }
 
@@ -406,6 +412,18 @@ export interface JobConfig {
   threshold: number;
 }
 
+// Stage result from API (workflow stage execution result)
+export interface StageResultFromAPI {
+  stage_id: string;
+  stage_type: StageType;
+  order: number;
+  input_count: number;
+  output_count: number;
+  filtered_count?: number;
+  status: "pending" | "running" | "completed" | "failed";
+  duration?: number;
+}
+
 export interface JobInfo {
   id: string;
   name: string;
@@ -417,13 +435,27 @@ export interface JobInfo {
   completed_at?: string;
   progress?: ProgressState;
   error?: string;
+  // Workflow stages configuration
+  workflow?: {
+    stages: Array<{
+      id: string;
+      type: StageType;
+      order: number;
+      config: Record<string, unknown>;
+    }>;
+  };
+  // Stage execution results
+  stage_results?: StageResultFromAPI[];
 }
 
 export interface JobResult {
   input: string;
+  input_type?: "video" | "image";
   success: boolean;
   output?: string;
   physics_score?: number;
+  physics_scores?: number[];
+  passed_filter?: boolean;
   error?: string;
 }
 
@@ -439,6 +471,15 @@ export interface ListJobsResponse {
 export interface GetJobResponse {
   job: JobInfo;
   results?: JobResult[];
+  stage_results?: StageResultFromAPI[];
+  workflow?: {
+    stages: Array<{
+      id: string;
+      type: StageType;
+      order: number;
+      config: Record<string, unknown>;
+    }>;
+  };
 }
 
 // ============ Predefined Styles ============
@@ -452,39 +493,39 @@ export interface TransferStyleCategory {
 // Lighting variations (조명)
 export const LIGHTING_STYLES: TransferStyle[] = [
   {
-    name: "일출",
+    name: "Sunrise",
     prompt: "Same scene during sunrise with soft pink and orange hues on the horizon, gentle morning light casting long shadows, and a gradual transition from darkness to daylight. Maintain temporal consistency.",
   },
   {
-    name: "오전",
+    name: "Morning",
     prompt: "Same scene during mid-morning with bright, clear daylight, moderate shadows, and natural color temperature. The sun is positioned at a moderate angle providing even illumination. Maintain temporal consistency.",
   },
   {
-    name: "정오",
+    name: "Noon",
     prompt: "Same scene at zenith with the sun directly overhead, minimal shadows, strong contrast, and bright, harsh lighting conditions typical of midday. Maintain temporal consistency.",
   },
   {
-    name: "오후",
+    name: "Afternoon",
     prompt: "Same scene during afternoon with warm, angled sunlight creating defined shadows, slightly golden tint to the lighting, and comfortable visibility. Maintain temporal consistency.",
   },
   {
-    name: "골든아워",
+    name: "Golden Hour",
     prompt: "Same scene during golden hour with rich, warm golden-orange lighting, long dramatic shadows, and a soft, cinematic quality to the illumination. Maintain temporal consistency.",
   },
   {
-    name: "석양",
+    name: "Sunset",
     prompt: "Same scene during sunset with warm golden and orange lighting, dramatic sky colors, elongated shadows, and a peaceful evening atmosphere. Maintain temporal consistency.",
   },
   {
-    name: "블루아워",
+    name: "Blue Hour",
     prompt: "Same scene during blue hour with soft blue ambient light, city lights beginning to appear, and a tranquil twilight atmosphere between sunset and night. Maintain temporal consistency.",
   },
   {
-    name: "황혼",
+    name: "Twilight",
     prompt: "Same scene during twilight with dim ambient light, mixed artificial and natural lighting, emerging stars, and a gradual transition to nighttime. Maintain temporal consistency.",
   },
   {
-    name: "야간",
+    name: "Night",
     prompt: "Same scene at night with artificial street lighting, vehicle headlights illuminating the road, dark sky, and urban light sources creating pools of illumination. Maintain temporal consistency.",
   },
 ];
@@ -492,27 +533,27 @@ export const LIGHTING_STYLES: TransferStyle[] = [
 // Weather variations (날씨)
 export const WEATHER_STYLES: TransferStyle[] = [
   {
-    name: "맑은 날",
+    name: "Clear Day",
     prompt: "Same scene on a clear day with bright blue sky, excellent visibility, crisp shadows, and vibrant colors under direct sunlight. Maintain temporal consistency.",
   },
   {
-    name: "흐린 날",
+    name: "Overcast",
     prompt: "Same scene on an overcast day with grey cloudy sky, diffused soft lighting, muted shadows, and even illumination across the scene. Maintain temporal consistency.",
   },
   {
-    name: "비/우천",
+    name: "Rainy",
     prompt: "Same scene during heavy rain with wet reflective road surfaces, water droplets, puddles forming, reduced visibility, and glistening reflections from lights. Maintain temporal consistency.",
   },
   {
-    name: "안개",
+    name: "Foggy",
     prompt: "Same scene in foggy weather with significantly reduced visibility, atmospheric haze, diffused lighting, and objects fading into the mist at distance. Maintain temporal consistency.",
   },
   {
-    name: "눈 내림",
+    name: "Light Snow",
     prompt: "Same scene during active snowfall with snowflakes falling through the air, reduced visibility, white accumulation beginning on surfaces, and cold winter atmosphere. Maintain temporal consistency.",
   },
   {
-    name: "폭설",
+    name: "Heavy Snow",
     prompt: "Same scene during heavy snowfall with thick snow accumulation on all surfaces, limited visibility, white-covered ground and objects, and intense winter conditions. Maintain temporal consistency.",
   },
 ];
@@ -520,19 +561,19 @@ export const WEATHER_STYLES: TransferStyle[] = [
 // Road surface variations (노면)
 export const ROAD_STYLES: TransferStyle[] = [
   {
-    name: "건조 노면",
+    name: "Dry Road",
     prompt: "Same scene with dry road surface, clear asphalt texture visible, no moisture or debris, optimal driving conditions with good tire grip. Maintain temporal consistency.",
   },
   {
-    name: "젖은 노면",
+    name: "Wet Road",
     prompt: "Same scene with wet road surface after rain, water puddles scattered across the road, reflective wet asphalt, and potential for hydroplaning conditions. Maintain temporal consistency.",
   },
   {
-    name: "눈 덮인 노면",
+    name: "Snow Covered",
     prompt: "Same scene with snow-covered road surface, white snow accumulation on the road, partially visible lane markings, and slippery winter driving conditions. Maintain temporal consistency.",
   },
   {
-    name: "모래/사막",
+    name: "Sandy Desert",
     prompt: "Same scene with sandy desert road conditions, dust particles in the air, sand accumulation on road edges, arid environment with desert landscape. Maintain temporal consistency.",
   },
 ];
@@ -540,11 +581,11 @@ export const ROAD_STYLES: TransferStyle[] = [
 // Special effects (특수 효과)
 export const SPECIAL_STYLES: TransferStyle[] = [
   {
-    name: "포토리얼리즘",
+    name: "Photorealism",
     prompt: "Same scene with enhanced photorealism, realistic textures, natural lighting, accurate material properties, and cinematic quality rendering. Maintain temporal consistency.",
   },
   {
-    name: "시뮬레이터→실사",
+    name: "Simulator to Reality",
     prompt: "Same scene transformed from synthetic simulation to photorealistic real-world appearance, with natural textures, realistic lighting, and authentic environmental details. Maintain temporal consistency.",
   },
 ];
@@ -559,46 +600,92 @@ export const TRANSFER_STYLES: TransferStyle[] = [
 
 // Categorized styles for UI display
 export const TRANSFER_STYLE_CATEGORIES: TransferStyleCategory[] = [
-  { name: "조명 (Lighting)", styles: LIGHTING_STYLES },
-  { name: "날씨 (Weather)", styles: WEATHER_STYLES },
-  { name: "노면 (Road Surface)", styles: ROAD_STYLES },
-  { name: "특수 효과 (Special)", styles: SPECIAL_STYLES },
+  { name: "Lighting", styles: LIGHTING_STYLES },
+  { name: "Weather", styles: WEATHER_STYLES },
+  { name: "Road Surface", styles: ROAD_STYLES },
+  { name: "Special Effects", styles: SPECIAL_STYLES },
 ];
 
-// ============ Detailed Mode Parameters ============
+// ============ Detailed Mode Parameters (Yetter Schema Compatible) ============
 
-export type Resolution = "480p" | "720p";
-export type FPS = 10 | 16;
-export type AspectRatio = "1:1" | "4:3" | "3:4" | "16:9" | "9:16";
+// Predict resolution format: "height,width" (e.g., "720,1280")
+export type PredictResolution = "480,854" | "480,640" | "720,1280" | "720,960";
+// Transfer resolution: just height as string
+export type TransferResolution = "480" | "720";
+export type FPS = 10 | 16 | 24;
 export type ModelSize = "2B" | "14B" | "8B";
+// Control types matching Yetter DB schema
+export type ControlType = "depth" | "edge" | "seg" | "vis";
 
+export type NumOutputFrames = 121 | 241 | 481;  // ~4s, ~8s, ~16s at 30fps base
+
+// Yetter Cosmos-Predict2.5 compatible params
 export interface PredictParams {
-  prompt: string;
+  // Always use array for prompts (each prompt generates separate output per input)
+  // For single prompt, use array with one element: ["my prompt"]
+  prompts: string[];
   negative_prompt?: string;
+  // Input source (one of these - selected from file browser in UI)
+  video_url?: string;  // Video2World: input video URL
+  image_url?: string;  // Image2World: input image URL
   seed: number;
-  guidance_scale: number;
-  resolution: Resolution;
-  fps: FPS;
-  aspect_ratio: AspectRatio;
-  model_size: "2B" | "14B";
-  num_conditioning_frames: 1 | 5;
-  disable_prompt_refiner: boolean;
+  // Yetter uses "guidance" not "guidance_scale"
+  guidance: number;  // default: 3.0
+  // Yetter format: "height,width" (e.g., "720,1280")
+  resolution: PredictResolution;
+  fps: FPS;  // default: 16
+  // Yetter uses "num_output_frames" not "num_frames"
+  num_output_frames: NumOutputFrames;  // default: 121
+  num_steps: number;  // default: 35
+  // Autoregressive generation options (for long video generation)
+  enable_autoregressive?: boolean;
+  chunk_size?: number;  // default: 33
+  chunk_overlap?: number;  // default: 9
 }
 
+// Control weights matching Yetter DB schema
 export interface ControlWeights {
   depth: number;
   edge: number;
-  seg: number;
-  vis: number;
+  seg: number;   // Segmentation control
+  vis: number;   // Visibility/blur control
 }
 
+// Control modalities for custom control video inputs
+export interface ControlModalities {
+  depth_url?: string;  // Custom depth control video URL
+  edge_url?: string;   // Custom edge control video URL
+  seg_url?: string;    // Custom segmentation video URL
+  vis_url?: string;    // Custom visibility/blur video URL
+}
+
+// Yetter Cosmos-Transfer2.5 compatible params
 export interface TransferParams {
-  styles: TransferStyle[];
-  custom_prompt?: string;
+  // Always use array for prompts (each prompt creates separate style variant)
+  // For single prompt, use array with one element: ["my prompt"]
+  prompts: string[];
+  negative_prompt?: string;
+  // Input source (required - set from file browser in UI)
+  video_url?: string;  // Input RGB video URL (simulation or source)
+  // Style presets (UI convenience - converted to prompts when sending)
+  styles?: TransferStyle[];
   seed: number;
-  guidance_scale: number;
-  num_steps: number;
+  // Yetter uses "guidance" not "guidance_scale"
+  guidance: number;  // default: 3.0
+  num_steps: number;  // default: 35
+  // Control settings
   control_weights: ControlWeights;
+  control_types?: ControlType[];  // default: derived from non-zero weights
+  control_modalities?: ControlModalities;  // Optional custom control videos (auto-generated if not provided)
+  // Transfer-specific
+  max_frames: number;  // default: 121
+  resolution: TransferResolution;  // "720" or "480"
+  fps: FPS;  // default: 24
+  // Advanced options
+  image_context_url?: string;  // Style conditioning context image URL
+  context_frame_index?: number;  // Context frame index for style conditioning (default: 0)
+  num_conditional_frames?: number;  // Number of conditional frames (default: 1)
+  seg_control_prompt?: string;  // Segmentation prompt for SAM2 (e.g., "car . road . building")
 }
 
 export interface ReasonParams {
@@ -626,28 +713,28 @@ export interface ControlWeightPreset {
 
 export const CONTROL_WEIGHT_PRESETS: ControlWeightPreset[] = [
   {
-    name: "날씨 변환",
-    description: "비/눈/안개 등 날씨 변경에 최적화",
+    name: "Weather Transfer",
+    description: "Optimized for weather changes (rain, snow, fog, etc.)",
     weights: { depth: 0.5, edge: 0.2, seg: 0.2, vis: 0.1 },
   },
   {
-    name: "시간대 변환",
-    description: "주간→야간, 석양 등 조명 변화",
+    name: "Time of Day",
+    description: "For lighting changes (daytime to night, sunset, etc.)",
     weights: { depth: 0.4, edge: 0.1, seg: 0.3, vis: 0.2 },
   },
   {
     name: "Sim2Real",
-    description: "시뮬레이션→실제 환경 변환",
+    description: "Simulation to real-world environment transformation",
     weights: { depth: 0.6, edge: 0.1, seg: 0.2, vis: 0.1 },
   },
   {
-    name: "텍스처 변환",
-    description: "형태 유지하며 텍스처만 변경",
+    name: "Texture Only",
+    description: "Preserve shape while changing texture details",
     weights: { depth: 0.2, edge: 0.4, seg: 0.2, vis: 0.2 },
   },
   {
-    name: "균등 배분",
-    description: "모든 모달리티 동일 가중치",
+    name: "Balanced",
+    description: "Equal weight for all modalities",
     weights: { depth: 0.25, edge: 0.25, seg: 0.25, vis: 0.25 },
   },
 ];
@@ -655,34 +742,46 @@ export const CONTROL_WEIGHT_PRESETS: ControlWeightPreset[] = [
 // ============ Reason Criteria ============
 
 export const REASON_CRITERIA = [
-  { id: "gravity", label: "중력 법칙", description: "물체의 낙하/이동이 자연스러운지" },
-  { id: "object_interaction", label: "객체 상호작용", description: "충돌/접촉 반응이 현실적인지" },
-  { id: "motion_consistency", label: "움직임 일관성", description: "속도/가속도 변화가 자연스러운지" },
-  { id: "lighting_coherence", label: "조명 일관성", description: "빛과 그림자가 일관적인지" },
-  { id: "object_permanence", label: "객체 영속성", description: "물체가 갑자기 사라지거나 나타나지 않는지" },
-  { id: "temporal_consistency", label: "시간적 일관성", description: "프레임 간 연속성이 유지되는지" },
+  { id: "gravity", label: "Gravity", description: "Whether object falling/movement is natural" },
+  { id: "object_interaction", label: "Object Interaction", description: "Whether collision/contact responses are realistic" },
+  { id: "motion_consistency", label: "Motion Consistency", description: "Whether velocity/acceleration changes are natural" },
+  { id: "lighting_coherence", label: "Lighting Coherence", description: "Whether light and shadows are consistent" },
+  { id: "object_permanence", label: "Object Permanence", description: "Whether objects don't suddenly disappear or appear" },
+  { id: "temporal_consistency", label: "Temporal Consistency", description: "Whether frame-to-frame continuity is maintained" },
 ];
 
-// ============ Default Values ============
+// ============ Default Values (Yetter Schema Compatible) ============
 
 export const DEFAULT_PREDICT_PARAMS: PredictParams = {
-  prompt: "Continue this video naturally with realistic physics. Maintain consistent lighting and object motion.",
-  seed: 42,
-  guidance_scale: 7.0,
-  resolution: "720p",
-  fps: 16,
-  aspect_ratio: "16:9",
-  model_size: "2B",
-  num_conditioning_frames: 1,
-  disable_prompt_refiner: false,
+  // Default prompt as single-element array
+  prompts: ["Continue this video naturally with realistic physics. Maintain consistent lighting and object motion."],
+  seed: 0,  // Yetter default: 0 for random
+  guidance: 3.0,  // Yetter default
+  resolution: "720,1280",  // Yetter format: "height,width"
+  fps: 16,  // Yetter default
+  num_output_frames: 121,  // Yetter field name
+  num_steps: 35,  // Yetter default
+  // Autoregressive options (disabled by default)
+  enable_autoregressive: false,
+  chunk_size: 33,  // Yetter default
+  chunk_overlap: 9,  // Yetter default
 };
 
 export const DEFAULT_TRANSFER_PARAMS: TransferParams = {
+  // Default prompt as single-element array (will be synced from styles if using presets)
+  prompts: ["Same scene with enhanced photorealism. Maintain temporal consistency."],
   styles: [TRANSFER_STYLES[0]],
-  seed: 42,
-  guidance_scale: 7.0,
-  num_steps: 20,
-  control_weights: { depth: 0.4, edge: 0.1, seg: 0.5, vis: 0.1 },
+  seed: 0,  // Yetter default: 0 for random
+  guidance: 3.0,  // Yetter default
+  num_steps: 35,  // Yetter default
+  control_weights: { depth: 0.5, edge: 0.3, seg: 0.5, vis: 0.3 },  // Yetter defaults
+  control_types: ["depth"],  // Default control type
+  max_frames: 121,  // Yetter default
+  resolution: "720",  // Yetter format
+  fps: 24,  // Yetter default
+  // Advanced options
+  context_frame_index: 0,  // Yetter default
+  num_conditional_frames: 1,  // Yetter default
 };
 
 export const DEFAULT_REASON_PARAMS: ReasonParams = {
@@ -715,9 +814,16 @@ export interface Workflow {
   name?: string;
 }
 
+// Input with file-specific prompts (for per-file prompt mapping)
+export interface InputWithPrompts {
+  path: string;
+  prompts?: string[];  // File-specific prompts from associated .txt file
+}
+
 export interface CreateWorkflowJobRequest {
   name?: string;
-  video_paths: string[];
+  video_paths: string[];  // Keep for backward compatibility
+  inputs?: InputWithPrompts[];  // New: file-specific prompt mapping
   workflow: Workflow;
 }
 
@@ -749,22 +855,22 @@ export const STAGE_METADATA: Record<StageType, {
 }> = {
   predict: {
     label: "Predict",
-    labelKo: "예측",
-    description: "미래 프레임 생성",
+    labelKo: "Predict",
+    description: "Generate future frames",
     color: "text-cyan-500",
     icon: "🎬",
   },
   transfer: {
     label: "Transfer",
-    labelKo: "변환",
-    description: "스타일/환경 변환",
+    labelKo: "Transfer",
+    description: "Style/environment transformation",
     color: "text-purple-500",
     icon: "🎨",
   },
   reason: {
     label: "Reason",
-    labelKo: "검증",
-    description: "물리 검증 (필터링)",
+    labelKo: "Reason",
+    description: "Physics validation (filtering)",
     color: "text-orange-500",
     icon: "🔍",
   },
@@ -792,8 +898,8 @@ export const DEFAULT_PROFILES: WorkflowProfile[] = [
   {
     id: "predict-only",
     name: "Predict Only",
-    nameKo: "예측만",
-    description: "미래 프레임만 생성",
+    nameKo: "Predict Only",
+    description: "Generate future frames only",
     stages: [
       { type: "predict", order: 1, config: DEFAULT_PREDICT_PARAMS },
     ],
@@ -802,8 +908,8 @@ export const DEFAULT_PROFILES: WorkflowProfile[] = [
   {
     id: "transfer-only",
     name: "Transfer Only",
-    nameKo: "변환만",
-    description: "스타일 변환만 수행",
+    nameKo: "Transfer Only",
+    description: "Style transformation only",
     stages: [
       { type: "transfer", order: 1, config: DEFAULT_TRANSFER_PARAMS },
     ],
@@ -812,7 +918,7 @@ export const DEFAULT_PROFILES: WorkflowProfile[] = [
   {
     id: "classic-full",
     name: "Classic Full",
-    nameKo: "기본 전체",
+    nameKo: "Classic Full",
     description: "Predict → Transfer → Reason",
     stages: [
       { type: "predict", order: 1, config: DEFAULT_PREDICT_PARAMS },
@@ -824,7 +930,7 @@ export const DEFAULT_PROFILES: WorkflowProfile[] = [
   {
     id: "quality-first",
     name: "Quality First",
-    nameKo: "품질 우선",
+    nameKo: "Quality First",
     description: "Predict → Reason → Transfer → Reason",
     stages: [
       { type: "predict", order: 1, config: DEFAULT_PREDICT_PARAMS },
@@ -837,7 +943,7 @@ export const DEFAULT_PROFILES: WorkflowProfile[] = [
   {
     id: "transfer-validated",
     name: "Transfer + Validate",
-    nameKo: "변환 + 검증",
+    nameKo: "Transfer + Validate",
     description: "Transfer → Reason",
     stages: [
       { type: "transfer", order: 1, config: DEFAULT_TRANSFER_PARAMS },
@@ -860,15 +966,24 @@ export interface WorkflowValidationResult {
   error?: string;
 }
 
-export const validateWorkflow = (stages: WorkflowStage[]): WorkflowValidationResult => {
+export interface WorkflowValidationOptions {
+  inputType?: "video" | "image";
+}
+
+export const validateWorkflow = (
+  stages: WorkflowStage[],
+  options?: WorkflowValidationOptions
+): WorkflowValidationResult => {
   if (stages.length === 0) {
-    return { valid: false, error: "최소 1개의 스테이지가 필요합니다" };
+    return { valid: false, error: "At least 1 stage is required" };
   }
   if (stages.length > 4) {
-    return { valid: false, error: "최대 4개의 스테이지만 허용됩니다" };
+    return { valid: false, error: "Maximum 4 stages allowed" };
   }
-  if (stages[0].type === "reason") {
-    return { valid: false, error: "첫 번째 스테이지는 Reason이 될 수 없습니다" };
+  // For video input, Reason can be first stage (for validating existing videos)
+  // For image input, Reason cannot be first (need to generate video first)
+  if (stages[0].type === "reason" && options?.inputType === "image") {
+    return { valid: false, error: "First stage cannot be Reason for image input" };
   }
   return { valid: true };
 };

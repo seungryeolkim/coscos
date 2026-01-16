@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { PipelineStage, STAGE_CONFIG, formatDuration } from "@/lib/types";
 
 interface PipelineStageInfo {
@@ -43,6 +44,8 @@ export function PipelineVisualizer({
   currentVideo,
   className = "",
 }: PipelineVisualizerProps) {
+  const t = useTranslations();
+
   // Filter out non-pipeline stages (idle, uploading, completed, failed)
   const pipelineStages = stages.filter((s) =>
     ["predict", "transfer", "reason"].includes(s.type)
@@ -137,9 +140,9 @@ export function PipelineVisualizer({
                     ) : isCompleted && stage.duration_seconds ? (
                       formatDuration(stage.duration_seconds)
                     ) : isActive ? (
-                      "처리중..."
+                      t("common.processing")
                     ) : (
-                      "대기"
+                      t("common.waiting")
                     )}
                   </span>
                 </div>

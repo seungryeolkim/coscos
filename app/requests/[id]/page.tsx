@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { getRequest } from "@/lib/api";
+import { getRequest, getJob } from "@/lib/api";
 import {
   Request,
   InputVideo,
@@ -13,6 +13,10 @@ import {
   formatDuration,
   getStatusColor,
   getScoreColor,
+  StageResultFromAPI,
+  StageType,
+  STAGE_METADATA,
+  GetJobResponse,
 } from "@/lib/types";
 import { VideoPreview, VideoPlaceholder } from "@/components/VideoPreview";
 import { VariantGrid } from "@/components/VariantCard";
@@ -35,6 +39,7 @@ export default function RequestDetailPage() {
   const tCommon = useTranslations("common");
 
   const [request, setRequest] = useState<Request | null>(null);
+  const [jobData, setJobData] = useState<GetJobResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedInputId, setSelectedInputId] = useState<string | null>(null);
@@ -42,13 +47,23 @@ export default function RequestDetailPage() {
   const [showCompare, setShowCompare] = useState(false);
   const inputVideoRef = useRef<HTMLVideoElement>(null);
 
-  // Fetch request data
+  // Fetch request data and job data
   useEffect(() => {
     async function fetchData() {
       try {
         const response = await getRequest(requestId);
         if (response.request) {
           setRequest(response.request);
+
+          // If request has jobId, fetch job data for stage_results
+          if (response.request.jobId) {
+            try {
+              const jobResponse = await getJob(response.request.jobId);
+              setJobData(jobResponse);
+            } catch (jobErr) {
+              console.warn("Could not fetch job data:", jobErr);
+            }
+          }
         } else {
           setError(t("notFound"));
         }
@@ -71,6 +86,16 @@ export default function RequestDetailPage() {
     }
     return request.inputs[0] || null;
   }, [request, selectedInputId]);
+
+  // Get workflow stages from job data
+  const workflowStages = useMemo(() => {
+    return jobData?.workflow?.stages || [];
+  }, [jobData]);
+
+  // Get stage results from job data
+  const stageResults = useMemo(() => {
+    return jobData?.stage_results || [];
+  }, [jobData]);
 
   if (isLoading) {
     return (
@@ -165,6 +190,14 @@ export default function RequestDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Workflow Pipeline Visualization */}
+        {(workflowStages.length > 0 || stageResults.length > 0) && (
+          <WorkflowPipeline
+            stages={workflowStages}
+            results={stageResults}
+          />
+        )}
       </div>
 
       {/* Main content: Different view based on status */}
@@ -199,11 +232,19 @@ export default function RequestDetailPage() {
           {/* Right content - Selected input detail (independent scroll) */}
           <div className="flex-1 overflow-y-auto overscroll-contain p-6">
             {selectedInput ? (
-              <InputDetailView
-                input={selectedInput}
-                config={request.config}
-                onCompare={handleCompare}
-              />
+              <>
+                {/* Stage Results Summary */}
+                {stageResults.length > 0 && (
+                  <StageResultsSummary results={stageResults} />
+                )}
+
+                <InputDetailView
+                  input={selectedInput}
+                  config={request.config}
+                  onCompare={handleCompare}
+                  jobResults={jobData?.results}
+                />
+              </>
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 {t("selectInput")}
@@ -305,6 +346,142 @@ export default function RequestDetailPage() {
   );
 }
 
+// Workflow Pipeline Visualization Component
+function WorkflowPipeline({
+  stages,
+  results,
+}: {
+  stages: Array<{ id: string; type: StageType; order: number; config: Record<string, unknown> }>;
+  results: StageResultFromAPI[];
+}) {
+  // If we have results but no stages, construct stages from results
+  const displayStages = stages.length > 0
+    ? stages
+    : results.map(r => ({ id: r.stage_id, type: r.stage_type, order: r.order, config: {} }));
+
+  if (displayStages.length === 0) return null;
+
+  // Sort by order
+  const sortedStages = [...displayStages].sort((a, b) => a.order - b.order);
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border/50">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground mr-2">Workflow:</span>
+        <div className="flex items-center gap-1">
+          {sortedStages.map((stage, idx) => {
+            const result = results.find(r => r.stage_id === stage.id || r.stage_type === stage.type);
+            const metadata = STAGE_METADATA[stage.type];
+            const isCompleted = result?.status === "completed";
+            const isFailed = result?.status === "failed";
+            const isRunning = result?.status === "running";
+
+            return (
+              <div key={stage.id} className="flex items-center">
+                {/* Stage pill */}
+                <div
+                  className={`
+                    flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
+                    ${isCompleted ? "bg-success/10 text-success border border-success/20" : ""}
+                    ${isFailed ? "bg-destructive/10 text-destructive border border-destructive/20" : ""}
+                    ${isRunning ? "bg-warning/10 text-warning border border-warning/20 animate-pulse" : ""}
+                    ${!result ? "bg-muted text-muted-foreground border border-border" : ""}
+                  `}
+                >
+                  <span>{metadata?.icon || "⚙️"}</span>
+                  <span>{metadata?.label || stage.type}</span>
+                  {result && (
+                    <span className="text-[10px] opacity-70">
+                      ({result.input_count}→{result.output_count})
+                    </span>
+                  )}
+                </div>
+
+                {/* Arrow between stages */}
+                {idx < sortedStages.length - 1 && (
+                  <svg className="w-4 h-4 mx-1 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Stage Results Summary Component
+function StageResultsSummary({ results }: { results: StageResultFromAPI[] }) {
+  const sortedResults = [...results].sort((a, b) => a.order - b.order);
+
+  return (
+    <Card className="mb-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">Stage Results</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {sortedResults.map((result) => {
+            const metadata = STAGE_METADATA[result.stage_type];
+            const isCompleted = result.status === "completed";
+            const isFailed = result.status === "failed";
+
+            return (
+              <div
+                key={result.stage_id}
+                className={`
+                  p-4 rounded-lg border
+                  ${isCompleted ? "bg-success/5 border-success/20" : ""}
+                  ${isFailed ? "bg-destructive/5 border-destructive/20" : ""}
+                  ${!isCompleted && !isFailed ? "bg-muted/50 border-border" : ""}
+                `}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">{metadata?.icon || "⚙️"}</span>
+                  <span className="font-medium">{metadata?.label || result.stage_type}</span>
+                  <Badge
+                    variant="outline"
+                    className={`ml-auto text-xs ${
+                      isCompleted ? "text-success" : isFailed ? "text-destructive" : "text-muted-foreground"
+                    }`}
+                  >
+                    {result.status}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Input: </span>
+                    <span className="font-mono">{result.input_count}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Output: </span>
+                    <span className="font-mono">{result.output_count}</span>
+                  </div>
+                  {result.filtered_count !== undefined && result.filtered_count > 0 && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Filtered: </span>
+                      <span className="font-mono text-warning">{result.filtered_count}</span>
+                    </div>
+                  )}
+                  {result.duration !== undefined && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Duration: </span>
+                      <span className="font-mono">{formatDuration(result.duration)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // Input list item component
 function InputListItem({
   input,
@@ -318,6 +495,9 @@ function InputListItem({
   const tCommon = useTranslations("common");
   const hasControl = !!input.controlPath;
 
+  // Check if input is an image
+  const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(input.rgbFilename);
+
   return (
     <button
       onClick={onClick}
@@ -328,6 +508,8 @@ function InputListItem({
       }`}
     >
       <div className="flex items-center gap-2 mb-1">
+        {/* Type indicator */}
+        <span className="text-xs">{isImage ? "🖼️" : "🎬"}</span>
         <span className="text-sm font-medium truncate">{input.rgbFilename}</span>
         {hasControl && (
           <Badge variant="secondary" className="text-xs">
@@ -372,25 +554,49 @@ function InputDetailView({
   input,
   config,
   onCompare,
+  jobResults,
 }: {
   input: InputVideo;
   config: { transferPrompts: string[]; controlWeights: { depth: number; edge: number; seg: number; vis: number }; seed: number; threshold: number };
   onCompare: (variant: Variant) => void;
+  jobResults?: Array<{
+    input: string;
+    input_type?: "video" | "image";
+    success: boolean;
+    output?: string;
+    physics_score?: number;
+    physics_scores?: number[];
+    passed_filter?: boolean;
+    error?: string;
+  }>;
 }) {
   const t = useTranslations("detail");
 
+  // Check if input is an image
+  const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(input.rgbFilename);
+
+  // Find job result for this input
+  const jobResult = jobResults?.find(r =>
+    r.input.includes(input.rgbFilename) || input.rgbPath.includes(r.input)
+  );
+
   return (
     <div className="space-y-6">
-      {/* Input videos */}
+      {/* Input media */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">{t("input")}</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <span>{isImage ? "🖼️" : "🎬"}</span>
+            {t("input")}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* RGB input */}
             <div>
-              <div className="text-sm text-muted-foreground mb-2">{t("rgbVideo")}</div>
+              <div className="text-sm text-muted-foreground mb-2">
+                {isImage ? "Input Image" : t("rgbVideo")}
+              </div>
               <div className="aspect-video">
                 <VideoPreview src={input.rgbPath} title="Original" autoPlayOnVisible={true} className="w-full h-full" />
               </div>
@@ -428,6 +634,66 @@ function InputDetailView({
           </div>
         </CardContent>
       </Card>
+
+      {/* Job Result (if available from stage results) */}
+      {jobResult && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Pipeline Result</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <div className="text-sm text-muted-foreground">Status</div>
+                <div className={jobResult.success ? "text-success font-medium" : "text-destructive font-medium"}>
+                  {jobResult.success ? "Success" : "Failed"}
+                </div>
+              </div>
+              {jobResult.physics_scores && jobResult.physics_scores.length > 0 && (
+                <div>
+                  <div className="text-sm text-muted-foreground">Physics Scores</div>
+                  <div className="font-mono text-sm">
+                    {jobResult.physics_scores.map((s, i) => (
+                      <span key={i} className={getScoreColor(s)}>
+                        {s.toFixed(2)}{i < jobResult.physics_scores!.length - 1 ? ", " : ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {jobResult.passed_filter !== undefined && (
+                <div>
+                  <div className="text-sm text-muted-foreground">Filter</div>
+                  <div className={jobResult.passed_filter ? "text-success" : "text-warning"}>
+                    {jobResult.passed_filter ? "Passed" : "Filtered"}
+                  </div>
+                </div>
+              )}
+              {jobResult.error && (
+                <div className="col-span-full">
+                  <div className="text-sm text-muted-foreground">Error</div>
+                  <div className="text-destructive text-sm">{jobResult.error}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Final output preview */}
+            {jobResult.output && (
+              <div className="mt-4">
+                <div className="text-sm text-muted-foreground mb-2">Final Output</div>
+                <div className="aspect-video max-w-md">
+                  <VideoPreview
+                    src={jobResult.output}
+                    title="Final Output"
+                    autoPlayOnVisible={true}
+                    className="w-full h-full"
+                  />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Output variants */}
       <Card>

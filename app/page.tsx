@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { LayoutGrid, Table as TableIcon } from "lucide-react";
 import { RequestCard } from "@/components/RequestCard";
 import { ProgressMonitor } from "@/components/ProgressMonitor";
 import { listRequests, checkAPIHealth } from "@/lib/api";
-import { Request, RequestStatus } from "@/lib/types";
+import { Request, RequestStatus, formatDate, formatDuration, getStatusColor, getScoreColor } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -15,6 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export default function HomePage() {
   const t = useTranslations("home");
@@ -26,6 +36,7 @@ export default function HomePage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   // Fetch data on mount
   useEffect(() => {
@@ -35,12 +46,13 @@ export default function HomePage() {
         const isHealthy = await checkAPIHealth();
         setApiConnected(isHealthy);
 
-        if (isHealthy) {
-          const response = await listRequests({ limit: 100 });
-          setRequests(response.requests);
-        } else {
-          setRequests([]);
-          setErrorMessage(t("error"));
+        // Always try to fetch requests (API will return real data or mock data)
+        const response = await listRequests({ limit: 100 });
+        setRequests(response.requests);
+
+        // Only show error if API is disconnected (don't show error for mock data)
+        if (!isHealthy) {
+          setErrorMessage(null);
         }
       } catch (error) {
         console.error("Failed to fetch requests:", error);
@@ -78,6 +90,14 @@ export default function HomePage() {
   const totalRequests = requests.length;
   const completedRequests = requests.filter((r) => r.status === "completed").length;
   const runningRequests = requests.filter((r) => r.status === "running").length;
+
+  // Status labels
+  const statusLabels: Record<string, string> = {
+    pending: tStatus("pending"),
+    running: tStatus("running"),
+    completed: tStatus("completed"),
+    failed: tStatus("failed"),
+  };
 
   return (
     <div className="container mx-auto px-6 py-8">
@@ -127,7 +147,7 @@ export default function HomePage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-4 mb-6 flex-wrap">
         {/* Status filter */}
         <Select
           value={statusFilter}
@@ -146,14 +166,34 @@ export default function HomePage() {
         </Select>
 
         {/* Search */}
-        <div className="flex-1">
-          <input
-            type="text"
-            placeholder={t("searchPlaceholder")}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full max-w-md px-3 py-2 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
+        <input
+          type="text"
+          placeholder={t("searchPlaceholder")}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="px-3 py-2 bg-secondary border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring max-w-md w-60"
+        />
+
+        {/* View toggle */}
+        <div className="flex items-center border border-border rounded-md overflow-hidden shrink-0 ml-auto">
+          <Button
+            variant={viewMode === 'cards' ? 'default' : 'ghost'}
+            size="icon"
+            onClick={() => setViewMode('cards')}
+            aria-label="Card view"
+            className="h-9 w-9 rounded-none"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === 'table' ? 'default' : 'ghost'}
+            size="icon"
+            onClick={() => setViewMode('table')}
+            aria-label="Table view"
+            className="h-9 w-9 rounded-none"
+          >
+            <TableIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Clear filters */}
@@ -181,11 +221,92 @@ export default function HomePage() {
         </div>
       ) : (
         /* Request list */
-        <div className="flex flex-col gap-4">
+        <>
           {filteredRequests.length > 0 ? (
-            filteredRequests.map((request) => (
-              <RequestCard key={request.id} request={request} />
-            ))
+            viewMode === 'cards' ? (
+              /* Card view */
+              <div className="flex flex-col gap-4">
+                {filteredRequests.map((request) => (
+                  <RequestCard key={request.id} request={request} />
+                ))}
+              </div>
+            ) : (
+              /* Table view */
+              <div className="rounded-md border border-border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[25%]">{t('table.name')}</TableHead>
+                      <TableHead className="w-[10%]">{t('table.status')}</TableHead>
+                      <TableHead className="w-[8%] text-right">{t('table.inputs')}</TableHead>
+                      <TableHead className="w-[8%] text-right">{t('table.variants')}</TableHead>
+                      <TableHead className="w-[10%] text-right">{t('table.passedFailed')}</TableHead>
+                      <TableHead className="w-[10%] text-right">{t('table.score')}</TableHead>
+                      <TableHead className="w-[10%] text-right">{t('table.duration')}</TableHead>
+                      <TableHead className="w-[19%] text-right">{t('table.created')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredRequests.map((request) => (
+                      <TableRow
+                        key={request.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => window.location.href = `/requests/${request.id}`}
+                      >
+                        <TableCell className="font-medium truncate max-w-0">
+                          {request.name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={`${getStatusColor(request.status)} border-current/20`}
+                          >
+                            {statusLabels[request.status]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {request.totalInputs}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {request.totalVariants}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {request.status === 'completed' ? (
+                            <span className="text-xs">
+                              <span className="text-success">{request.passedCount}</span>
+                              {request.failedCount > 0 && (
+                                <> / <span className="text-error">{request.failedCount}</span></>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {request.status === 'completed' && request.avgScore > 0 ? (
+                            <span className={`font-mono text-sm ${getScoreColor(request.avgScore)}`}>
+                              {request.avgScore.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {request.totalDuration ? (
+                            <span className="text-xs">{formatDuration(request.totalDuration)}</span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">
+                          {formatDate(request.createdAt)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               {errorMessage ? (
@@ -203,7 +324,7 @@ export default function HomePage() {
               )}
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

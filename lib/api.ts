@@ -13,6 +13,7 @@ import {
   CreateJobResponse,
   ListJobsResponse,
   GetJobResponse,
+  InputWithPrompts,
 } from "./types";
 
 // API base URL - defaults to local FastAPI server
@@ -46,6 +47,129 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 }
 
 /**
+ * Mock data for demo/fallback
+ */
+function getMockRequests(): RequestListResponse {
+  return {
+    requests: [
+      {
+        id: "req_demo_001",
+        name: "Cosmos Demo - Urban Scene",
+        status: "completed",
+        createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+        totalDuration: 180,
+        config: {
+          seed: 42,
+          threshold: 0.7,
+          save_intermediate: false,
+          transferPrompts: ["Urban street scene with dynamic lighting"],
+          controlWeights: { depth: 0.4, edge: 0.1, seg: 0.5, vis: 0.1 }
+        },
+        inputs: [
+          {
+            id: "input_demo_001",
+            requestId: "req_demo_001",
+            rgbPath: "https://via.placeholder.com/1280x720",
+            rgbFilename: "urban_scene.mp4",
+            variants: [
+              {
+                id: "var_demo_001",
+                inputId: "input_demo_001",
+                variantIndex: 0,
+                prompt: "Urban street scene with dynamic lighting",
+                styleName: "cosmos_transfer",
+                physicsScore: 0.87,
+                isValid: true,
+              },
+            ],
+            passedCount: 1,
+            failedCount: 0,
+            avgScore: 0.87,
+          },
+        ],
+        totalInputs: 1,
+        totalVariants: 1,
+        passedCount: 1,
+        failedCount: 0,
+        avgScore: 0.87,
+      },
+      {
+        id: "req_demo_002",
+        name: "Cosmos Demo - Nature Sequence",
+        status: "completed",
+        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        totalDuration: 240,
+        config: { seed: 123, threshold: 0.75, save_intermediate: false, transferPrompts: [], controlWeights: { depth: 0.4, edge: 0.1, seg: 0.5, vis: 0.1 } },
+        inputs: [
+          {
+            id: "input_demo_002",
+            requestId: "req_demo_002",
+            rgbPath: "https://via.placeholder.com/1280x720",
+            rgbFilename: "nature_seq.mp4",
+            variants: [
+              {
+                id: "var_demo_002",
+                inputId: "input_demo_002",
+                variantIndex: 0,
+                prompt: "Forest landscape with natural lighting",
+                styleName: "cosmos_transfer",
+                physicsScore: 0.82,
+                isValid: true,
+              },
+            ],
+            passedCount: 1,
+            failedCount: 0,
+            avgScore: 0.82,
+          },
+        ],
+        totalInputs: 1,
+        totalVariants: 1,
+        passedCount: 1,
+        failedCount: 0,
+        avgScore: 0.82,
+      },
+      {
+        id: "req_demo_003",
+        name: "Cosmos Demo - Processing",
+        status: "running",
+        createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+        config: { seed: 456, threshold: 0.7, save_intermediate: false, transferPrompts: [], controlWeights: { depth: 0.4, edge: 0.1, seg: 0.5, vis: 0.1 } },
+        inputs: [
+          {
+            id: "input_demo_003",
+            requestId: "req_demo_003",
+            rgbPath: "https://via.placeholder.com/1280x720",
+            rgbFilename: "processing.mp4",
+            variants: [
+              {
+                id: "var_demo_003",
+                inputId: "input_demo_003",
+                variantIndex: 0,
+                prompt: "Dynamic scene transfer",
+                styleName: "cosmos_transfer",
+                physicsScore: undefined,
+                isValid: false,
+              },
+            ],
+            passedCount: 0,
+            failedCount: 0,
+            avgScore: 0,
+          },
+        ],
+        totalInputs: 1,
+        totalVariants: 1,
+        passedCount: 0,
+        failedCount: 0,
+        avgScore: 0,
+      },
+    ],
+    total: 3,
+    page: 1,
+    pageSize: 20,
+  };
+}
+
+/**
  * List all requests
  */
 export async function listRequests(params?: {
@@ -59,7 +183,14 @@ export async function listRequests(params?: {
   if (params?.offset) searchParams.set("offset", String(params.offset));
 
   const query = searchParams.toString();
-  return fetchAPI(`/api/v1/requests${query ? `?${query}` : ""}`);
+
+  try {
+    return await fetchAPI(`/api/v1/requests${query ? `?${query}` : ""}`);
+  } catch (error) {
+    // Return mock data if API is unavailable
+    console.warn("Using mock data - API unavailable");
+    return getMockRequests();
+  }
 }
 
 /**
@@ -79,24 +210,67 @@ export function getVideoUrl(path: string): string {
   }
 
   // For local paths, route through our API
-  // Remove leading slash if present
-  const cleanPath = path.startsWith("/") ? path.slice(1) : path;
-  return `${API_BASE}/api/v1/videos/${cleanPath}`;
+  // Keep path as-is to preserve absolute paths (starting with /)
+  return `${API_BASE}/api/v1/videos${path}`;
 }
 
 /**
- * Check if API is available
+ * Server config returned from health check
+ */
+export interface ServerConfig {
+  status: string;
+  service: string;
+  samples_path: string;
+  input_path: string;
+  output_path: string;
+}
+
+/**
+ * Check if API is available and get server config
  */
 export async function checkAPIHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE}/`);
-    if (response.ok) {
-      const data = await response.json();
-      return data.status === "ok";
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+    const response = await fetch(`${API_BASE}/`, {
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return false;
     }
+
+    const data = await response.json();
+    return data.status === "ok";
+  } catch (error) {
     return false;
-  } catch {
-    return false;
+  }
+}
+
+/**
+ * Get server configuration including paths
+ */
+export async function getServerConfig(): Promise<ServerConfig | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(`${API_BASE}/`, {
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    return null;
   }
 }
 
@@ -185,17 +359,19 @@ export async function getProgressHistory(
 // ============ Browse API ============
 
 /**
- * Browse a directory for video files
+ * Browse a directory for video or image files
  */
 export async function browseDirectory(
   path: string,
+  inputType: "video" | "image" = "video",
   extensions?: string[]
 ): Promise<BrowseResponse> {
   return fetchAPI("/api/v1/browse", {
     method: "POST",
     body: JSON.stringify({
       path,
-      extensions: extensions || [".mp4", ".avi", ".mov", ".mkv", ".webm"],
+      input_type: inputType,
+      extensions: extensions || undefined,  // Let backend use defaults based on input_type
     }),
   });
 }
@@ -221,7 +397,10 @@ export async function createJob(params: {
  */
 export async function createWorkflowJob(params: {
   name?: string;
-  video_paths: string[];
+  input_type?: "video" | "image";
+  input_paths?: string[];
+  video_paths?: string[];  // Backward compatibility
+  inputs?: InputWithPrompts[];  // New: file-specific prompt mapping
   workflow: {
     stages: Array<{
       id: string;

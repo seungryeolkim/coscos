@@ -3,6 +3,15 @@
 import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { getVideoUrl } from "@/lib/api";
 
+// Image file extensions
+const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"];
+
+// Check if a path is an image file
+function isImageFile(path: string): boolean {
+  const lowerPath = path.toLowerCase();
+  return IMAGE_EXTENSIONS.some((ext) => lowerPath.endsWith(ext));
+}
+
 interface VideoPreviewProps {
   src: string;
   title?: string;
@@ -128,7 +137,18 @@ export const VideoPreview = forwardRef<HTMLVideoElement, VideoPreviewProps>(
   };
 
   // Convert path to API URL
-  const videoSrc = getVideoUrl(src);
+  const mediaSrc = getVideoUrl(src);
+  const isImage = isImageFile(src);
+
+  // For images, handle loading differently
+  const handleImageLoad = () => {
+    setIsLoading(false);
+  };
+
+  const handleImageError = () => {
+    setIsLoading(false);
+    setError("Failed to load image");
+  };
 
   return (
     <div ref={containerRef} className={`relative rounded-lg overflow-hidden bg-black ${className}`}>
@@ -144,7 +164,9 @@ export const VideoPreview = forwardRef<HTMLVideoElement, VideoPreviewProps>(
         <div className="absolute inset-0 flex items-center justify-center bg-muted">
           <div className="flex flex-col items-center gap-2">
             <div className="w-8 h-8 border-2 border-muted-foreground border-t-foreground rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground">Loading video...</span>
+            <span className="text-sm text-muted-foreground">
+              {isImage ? "Loading image..." : "Loading video..."}
+            </span>
           </div>
         </div>
       )}
@@ -166,23 +188,34 @@ export const VideoPreview = forwardRef<HTMLVideoElement, VideoPreviewProps>(
         </div>
       )}
 
-      {/* Video element */}
-      <video
-        ref={videoRef}
-        src={videoSrc}
-        autoPlay={autoPlay}
-        loop={loop}
-        muted={muted}
-        controls={controls}
-        playsInline
-        onLoadedMetadata={handleLoadedMetadata}
-        onTimeUpdate={handleTimeUpdate}
-        onError={handleError}
-        className="w-full h-full object-contain"
-      />
+      {/* Image element */}
+      {isImage ? (
+        <img
+          src={mediaSrc}
+          alt={title || "Preview"}
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          className="w-full h-full object-contain"
+        />
+      ) : (
+        /* Video element */
+        <video
+          ref={videoRef}
+          src={mediaSrc}
+          autoPlay={autoPlay}
+          loop={loop}
+          muted={muted}
+          controls={controls}
+          playsInline
+          onLoadedMetadata={handleLoadedMetadata}
+          onTimeUpdate={handleTimeUpdate}
+          onError={handleError}
+          className="w-full h-full object-contain"
+        />
+      )}
 
-      {/* Time display overlay (when controls are hidden) */}
-      {!controls && duration > 0 && (
+      {/* Time display overlay (when controls are hidden) - only for video */}
+      {!isImage && !controls && duration > 0 && (
         <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/70 to-transparent p-3">
           <div className="flex items-center justify-between text-xs text-white/80">
             <span>{formatTime(currentTime)}</span>

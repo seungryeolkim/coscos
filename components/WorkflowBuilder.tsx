@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -59,6 +60,11 @@ const saveCustomProfiles = (profiles: WorkflowProfile[]) => {
 };
 
 export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps) {
+  const t = useTranslations("workflow");
+  const tPredict = useTranslations("workflow.predict");
+  const tTransfer = useTranslations("workflow.transfer");
+  const tReason = useTranslations("workflow.reason");
+
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [configEditMode, setConfigEditMode] = useState<"ui" | "json">("ui");
   const [jsonCode, setJsonCode] = useState("");
@@ -82,13 +88,22 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
   // Get active stage
   const activeStage = stages.find((s) => s.id === activeStageId);
 
+  // Track previous active stage ID to detect stage switches
+  const prevActiveStageIdRef = useRef<string | null>(null);
+
   // Sync JSON with active stage config
   useEffect(() => {
-    if (activeStage && configEditMode === "ui") {
+    if (!activeStage) return;
+
+    const stageChanged = prevActiveStageIdRef.current !== activeStageId;
+    prevActiveStageIdRef.current = activeStageId;
+
+    // Update JSON when: stage changed (any mode) OR UI mode config update
+    if (stageChanged || configEditMode === "ui") {
       setJsonCode(JSON.stringify(activeStage.config, null, 2));
       setJsonError(null);
     }
-  }, [activeStage, configEditMode]);
+  }, [activeStage, activeStageId, configEditMode]);
 
   // Add stage
   const addStage = useCallback(
@@ -260,11 +275,21 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
   const getStageSummary = (stage: WorkflowStage): string => {
     if (stage.type === "predict") {
       const c = stage.config as PredictParams;
-      return `${c.resolution} / ${c.fps} FPS / ${c.model_size}`;
+      const promptCount = c.prompts?.length || 0;
+      const promptInfo = promptCount === 1 ? "1 prompt" : `${promptCount} prompts`;
+      // Parse resolution format "height,width" to display
+      const [height] = c.resolution.split(",");
+      return `${promptInfo} / ${height}p / ${c.num_steps} steps`;
     }
     if (stage.type === "transfer") {
       const c = stage.config as TransferParams;
-      return `${c.styles?.length || 0} styles / ${c.num_steps} steps`;
+      const promptCount = c.prompts?.length || 0;
+      const promptInfo = c.styles?.length
+        ? `${c.styles.length} styles`
+        : promptCount === 1
+        ? "1 prompt"
+        : `${promptCount} prompts`;
+      return `${promptInfo} / ${c.resolution}p / ${c.num_steps} steps`;
     }
     if (stage.type === "reason") {
       const c = stage.config as ReasonStageConfig;
@@ -278,7 +303,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
       {/* Profiles Section */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium">Profiles (프로필)</label>
+          <label className="text-sm font-medium">{t("profiles")}</label>
           <Button
             variant="ghost"
             size="sm"
@@ -286,7 +311,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
             disabled={stages.length === 0}
             className="text-xs h-7"
           >
-            + 현재 워크플로우 저장
+            {t("saveCurrentWorkflow")}
           </Button>
         </div>
 
@@ -295,17 +320,17 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
           <div className="mb-3 p-3 rounded-lg border bg-accent/30 space-y-2">
             <div className="flex gap-2">
               <Input
-                placeholder="프로필 이름..."
+                placeholder={t("profileName")}
                 value={newProfileName}
                 onChange={(e) => setNewProfileName(e.target.value)}
                 className="flex-1 h-8 text-sm"
                 onKeyDown={(e) => e.key === "Enter" && saveAsProfile()}
               />
               <Button size="sm" onClick={saveAsProfile} disabled={!newProfileName.trim()} className="h-8">
-                저장
+                {t("save")}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => setShowSaveDialog(false)} className="h-8">
-                취소
+                {t("cancel")}
               </Button>
             </div>
           </div>
@@ -342,7 +367,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
                 <button
                   onClick={() => deleteProfile(profile.id)}
                   className="text-muted-foreground hover:text-destructive text-xs px-1"
-                  title="삭제"
+                  title={t("delete")}
                 >
                   ×
                 </button>
@@ -354,7 +379,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
 
       {/* Available Stages - First */}
       <div>
-        <label className="text-sm font-medium mb-2 block">Available Stages</label>
+        <label className="text-sm font-medium mb-2 block">{t("availableStages")}</label>
         <div className="grid grid-cols-3 gap-3">
           {(["predict", "transfer", "reason"] as StageType[]).map((type) => {
             const meta = STAGE_METADATA[type];
@@ -377,7 +402,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
                 <div className="text-xs text-muted-foreground">{meta.description}</div>
                 <div className="mt-2">
                   <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary">
-                    + Add
+                    {t("add")}
                   </span>
                 </div>
               </button>
@@ -389,11 +414,11 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
       {/* Pipeline Builder - Below available stages */}
       <div className="border border-border rounded-lg p-4 bg-card/50">
         <div className="flex items-center justify-between mb-3">
-          <label className="text-sm font-medium">Your Pipeline</label>
+          <label className="text-sm font-medium">{t("yourPipeline")}</label>
           <div className="flex items-center gap-2">
             {stages.length > 0 && (
               <Button variant="ghost" size="sm" onClick={clearStages} className="text-xs h-7">
-                Clear All
+                {t("clearAll")}
               </Button>
             )}
             <span
@@ -403,7 +428,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
                   : "bg-muted text-muted-foreground"
               }`}
             >
-              {stages.length}/4 stages
+              {stages.length}/4 {t("stages")}
             </span>
           </div>
         </div>
@@ -417,7 +442,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
                   key={slot}
                   className="w-[140px] h-[90px] border-2 border-dashed border-border/50 rounded-lg flex items-center justify-center text-muted-foreground/50"
                 >
-                  <span className="text-xs">Stage {slot}</span>
+                  <span className="text-xs">{t("stage")} {slot}</span>
                 </div>
               ))}
             </div>
@@ -448,7 +473,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
                         <span className={`font-medium text-sm ${meta.color}`}>{meta.label}</span>
                         {stage.type === "reason" && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-500">
-                            Filter
+                            {t("filter")}
                           </span>
                         )}
                       </div>
@@ -523,7 +548,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
         {/* Pipeline description */}
         {stages.length > 0 && validation.valid && (
           <div className="mt-2 text-xs text-muted-foreground">
-            Pipeline: {stages.map((s) => STAGE_METADATA[s.type].label).join(" → ")}
+            {t("pipeline")}: {stages.map((s) => STAGE_METADATA[s.type].label).join(" → ")}
           </div>
         )}
       </div>
@@ -533,7 +558,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
         <div className="border-2 border-primary rounded-lg p-4 bg-card shadow-lg shadow-primary/10">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-medium">
-              Configure Stage {activeStage.order}: {STAGE_METADATA[activeStage.type].label}
+              {t("configureStage")} {activeStage.order}: {STAGE_METADATA[activeStage.type].label}
             </h3>
             <Tabs value={configEditMode} onValueChange={handleEditModeChange} className="w-auto">
               <TabsList className="h-8">
@@ -602,7 +627,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
                     setJsonError(null);
                   }}
                 >
-                  Reset
+                  {t("reset")}
                 </Button>
                 <Button
                   size="sm"
@@ -613,7 +638,7 @@ export function WorkflowBuilder({ stages, onStagesChange }: WorkflowBuilderProps
                   }}
                   disabled={!!jsonError}
                 >
-                  Apply
+                  {t("apply")}
                 </Button>
               </div>
             </div>
@@ -631,33 +656,117 @@ interface PredictConfigUIProps {
 }
 
 function PredictConfigUI({ config, onChange }: PredictConfigUIProps) {
+  const t = useTranslations("workflow.predict");
+  const [newPrompt, setNewPrompt] = useState("");
+
+  // Always use prompts array
+  const prompts = config.prompts || [];
+
+  // Add a new prompt to the list
+  const addPrompt = () => {
+    if (!newPrompt.trim()) return;
+    const updated = [...prompts, newPrompt.trim()];
+    onChange({ ...config, prompts: updated });
+    setNewPrompt("");
+  };
+
+  // Remove a prompt from the list
+  const removePrompt = (index: number) => {
+    if (prompts.length <= 1) return; // Keep at least one prompt
+    const updated = prompts.filter((_, i) => i !== index);
+    onChange({ ...config, prompts: updated });
+  };
+
+  // Update a specific prompt
+  const updatePrompt = (index: number, value: string) => {
+    const updated = [...prompts];
+    updated[index] = value;
+    onChange({ ...config, prompts: updated });
+  };
+
   return (
     <div className="space-y-4">
-      {/* Prompt */}
-      <div>
-        <label className="text-sm font-medium mb-1 block">Prompt</label>
-        <textarea
-          value={config.prompt}
-          onChange={(e) => onChange({ ...config, prompt: e.target.value })}
-          className="w-full h-20 px-3 py-2 bg-secondary border border-border rounded-md text-sm resize-none"
-          placeholder="Describe the video continuation..."
-        />
+      {/* Prompts Section */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium">{t("prompts") || "Prompts"} ({prompts.length})</label>
+          <span className="text-xs text-muted-foreground">
+            {prompts.length === 1
+              ? (t("singlePromptHint") || "1 input → 1 output")
+              : (t("multiPromptHint", { count: prompts.length }) || `1 input → ${prompts.length} outputs`)}
+          </span>
+        </div>
+
+        {/* Prompts list */}
+        <div className="space-y-2 max-h-48 overflow-y-auto">
+          {prompts.map((prompt, index) => (
+            <div key={index} className="flex items-start gap-2 p-2 bg-secondary/50 rounded-lg">
+              <span className="text-xs font-mono text-muted-foreground mt-2 w-6">
+                {index + 1}.
+              </span>
+              <textarea
+                value={prompt}
+                onChange={(e) => updatePrompt(index, e.target.value)}
+                className="flex-1 px-2 py-1.5 bg-background border border-border rounded text-sm resize-none min-h-[60px]"
+                placeholder={t("promptPlaceholder") || "Describe the video generation..."}
+              />
+              <button
+                onClick={() => removePrompt(index)}
+                disabled={prompts.length <= 1}
+                className="text-destructive hover:bg-destructive/10 rounded p-1 mt-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                title={t("remove") || "Remove"}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Add new prompt */}
+        <div className="flex gap-2">
+          <textarea
+            value={newPrompt}
+            onChange={(e) => setNewPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.metaKey) {
+                e.preventDefault();
+                addPrompt();
+              }
+            }}
+            className="flex-1 px-3 py-2 bg-secondary border border-border rounded-md text-sm resize-none h-16"
+            placeholder={t("addPromptPlaceholder") || "Add another prompt... (⌘+Enter to add)"}
+          />
+          <Button
+            onClick={addPrompt}
+            disabled={!newPrompt.trim()}
+            className="self-end"
+          >
+            {t("add") || "Add"}
+          </Button>
+        </div>
+
+        {/* Import from file hint */}
+        <p className="text-xs text-muted-foreground bg-blue-500/10 border border-blue-500/20 rounded p-2">
+          💡 {t("autoPromptHint") || "Tip: If you select a video/image with a matching .txt file (same name), prompts will be auto-imported. Each line = one prompt."}
+        </p>
       </div>
 
-      {/* Basic options */}
+      {/* Basic options - Yetter compatible */}
       <div className="grid grid-cols-4 gap-4">
         <div>
-          <label className="text-sm text-muted-foreground mb-1 block">Resolution</label>
+          <label className="text-sm text-muted-foreground mb-1 block">{t("resolution")}</label>
           <Select
             value={config.resolution}
-            onValueChange={(v) => onChange({ ...config, resolution: v as "480p" | "720p" })}
+            onValueChange={(v) => onChange({ ...config, resolution: v as any })}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="480p">480p</SelectItem>
-              <SelectItem value="720p">720p</SelectItem>
+              <SelectItem value="720,1280">720p (16:9)</SelectItem>
+              <SelectItem value="720,960">720p (4:3)</SelectItem>
+              <SelectItem value="480,854">480p (16:9)</SelectItem>
+              <SelectItem value="480,640">480p (4:3)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -677,50 +786,50 @@ function PredictConfigUI({ config, onChange }: PredictConfigUIProps) {
           </Select>
         </div>
         <div>
-          <label className="text-sm text-muted-foreground mb-1 block">Aspect</label>
+          <label className="text-sm text-muted-foreground mb-1 block">{t("numFrames") || "Frames"}</label>
           <Select
-            value={config.aspect_ratio}
-            onValueChange={(v) => onChange({ ...config, aspect_ratio: v as any })}
+            value={String(config.num_output_frames || 121)}
+            onValueChange={(v) => onChange({ ...config, num_output_frames: Number(v) as 121 | 241 | 481 })}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="16:9">16:9</SelectItem>
-              <SelectItem value="9:16">9:16</SelectItem>
-              <SelectItem value="1:1">1:1</SelectItem>
-              <SelectItem value="4:3">4:3</SelectItem>
+              <SelectItem value="121">~{Math.round(121 / config.fps)}s (121)</SelectItem>
+              <SelectItem value="241">~{Math.round(241 / config.fps)}s (241)</SelectItem>
+              <SelectItem value="481">~{Math.round(481 / config.fps)}s (481)</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <label className="text-sm text-muted-foreground mb-1 block">Model</label>
+          <label className="text-sm text-muted-foreground mb-1 block">Steps</label>
           <Select
-            value={config.model_size}
-            onValueChange={(v) => onChange({ ...config, model_size: v as "2B" | "14B" })}
+            value={String(config.num_steps || 35)}
+            onValueChange={(v) => onChange({ ...config, num_steps: Number(v) })}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="2B">2B (Fast)</SelectItem>
-              <SelectItem value="14B">14B (Quality)</SelectItem>
+              <SelectItem value="20">20 (Fast)</SelectItem>
+              <SelectItem value="35">35 (Default)</SelectItem>
+              <SelectItem value="50">50 (Quality)</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
       {/* Advanced */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-sm text-muted-foreground mb-2 block">
-            Guidance: {config.guidance_scale}
+            {t("guidance")}: {config.guidance}
           </label>
           <Slider
-            value={[config.guidance_scale]}
-            onValueChange={([v]) => onChange({ ...config, guidance_scale: v })}
+            value={[config.guidance]}
+            onValueChange={([v]) => onChange({ ...config, guidance: v })}
             min={1}
-            max={15}
+            max={10}
             step={0.5}
           />
         </div>
@@ -731,23 +840,6 @@ function PredictConfigUI({ config, onChange }: PredictConfigUIProps) {
             value={config.seed}
             onChange={(e) => onChange({ ...config, seed: Number(e.target.value) })}
           />
-        </div>
-        <div>
-          <label className="text-sm text-muted-foreground mb-1 block">Cond. Frames</label>
-          <Select
-            value={String(config.num_conditioning_frames)}
-            onValueChange={(v) =>
-              onChange({ ...config, num_conditioning_frames: Number(v) as 1 | 5 })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">1 Frame</SelectItem>
-              <SelectItem value="5">5 Frames</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
@@ -760,13 +852,61 @@ function PredictConfigUI({ config, onChange }: PredictConfigUIProps) {
         />
       </div>
 
-      <label className="flex items-center gap-2 text-sm">
-        <Checkbox
-          checked={config.disable_prompt_refiner}
-          onCheckedChange={(c) => onChange({ ...config, disable_prompt_refiner: !!c })}
-        />
-        Disable Prompt Refiner
-      </label>
+      {/* Autoregressive Generation Options */}
+      <div className="p-4 bg-secondary/50 rounded-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="enable_autoregressive"
+              checked={config.enable_autoregressive || false}
+              onCheckedChange={(checked) =>
+                onChange({ ...config, enable_autoregressive: !!checked })
+              }
+            />
+            <label htmlFor="enable_autoregressive" className="text-sm font-medium cursor-pointer">
+              {t("enableAutoregressive") || "Enable Autoregressive Generation"}
+            </label>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {t("forLongVideos") || "For long video generation"}
+          </span>
+        </div>
+
+        {config.enable_autoregressive && (
+          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">
+                {t("chunkSize") || "Chunk Size"}: {config.chunk_size || 33}
+              </label>
+              <Slider
+                value={[config.chunk_size || 33]}
+                onValueChange={([v]) => onChange({ ...config, chunk_size: v })}
+                min={17}
+                max={65}
+                step={8}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {t("chunkSizeDesc") || "Frames per generation chunk"}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">
+                {t("chunkOverlap") || "Chunk Overlap"}: {config.chunk_overlap || 9}
+              </label>
+              <Slider
+                value={[config.chunk_overlap || 9]}
+                onValueChange={([v]) => onChange({ ...config, chunk_overlap: v })}
+                min={1}
+                max={17}
+                step={2}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {t("chunkOverlapDesc") || "Overlap frames between chunks"}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -778,18 +918,29 @@ interface TransferConfigUIProps {
 }
 
 function TransferConfigUI({ config, onChange }: TransferConfigUIProps) {
+  // Default control weights if not set
+  // Default weights matching Yetter schema
+  const defaultWeights = { depth: 0.5, edge: 0.3, seg: 0.5, vis: 0.3 };
+  const controlWeights = config.control_weights || defaultWeights;
+
   const [selectedStyles, setSelectedStyles] = useState<Set<string>>(
     new Set(config.styles?.map((s) => s.name) || [])
   );
-  const [useCustomPrompt, setUseCustomPrompt] = useState(!!config.custom_prompt);
+  const [useCustomPrompt, setUseCustomPrompt] = useState(!config.styles?.length);
   const [selectedPreset, setSelectedPreset] = useState("");
+  const [newPrompt, setNewPrompt] = useState("");
 
-  // Sync styles with config
+  // Always use prompts array
+  const prompts = config.prompts || [];
+
+  // Sync styles with config and update prompts array
   useEffect(() => {
     if (!useCustomPrompt) {
       const styles = TRANSFER_STYLES.filter((s) => selectedStyles.has(s.name));
       if (styles.length > 0) {
-        onChange({ ...config, styles });
+        // Convert selected styles to prompts array
+        const stylePrompts = styles.map((s) => s.prompt);
+        onChange({ ...config, styles, prompts: stylePrompts });
       }
     }
   }, [selectedStyles, useCustomPrompt]);
@@ -804,56 +955,228 @@ function TransferConfigUI({ config, onChange }: TransferConfigUIProps) {
     setSelectedStyles(newSelected);
   };
 
+  // Add custom prompt
+  const addPrompt = () => {
+    if (!newPrompt.trim()) return;
+    const updated = [...prompts, newPrompt.trim()];
+    onChange({ ...config, prompts: updated });
+    setNewPrompt("");
+  };
+
+  // Remove prompt
+  const removePrompt = (index: number) => {
+    if (prompts.length <= 1) return;
+    const updated = prompts.filter((_, i) => i !== index);
+    onChange({ ...config, prompts: updated });
+  };
+
+  // Update prompt
+  const updatePrompt = (index: number, value: string) => {
+    const updated = [...prompts];
+    updated[index] = value;
+    onChange({ ...config, prompts: updated });
+  };
+
   const applyPreset = (presetName: string) => {
     const preset = CONTROL_WEIGHT_PRESETS.find((p) => p.name === presetName);
     if (preset) {
       setSelectedPreset(presetName);
-      onChange({ ...config, control_weights: { ...preset.weights } });
+      // Update control weights and derive control_types from non-zero weights
+      const control_types = (Object.entries(preset.weights) as [string, number][])
+        .filter(([, v]) => v > 0)
+        .map(([k]) => k as "depth" | "edge" | "seg" | "vis");
+      onChange({ ...config, control_weights: { ...preset.weights }, control_types });
     }
   };
 
-  const totalWeight = Object.values(config.control_weights).reduce((a, b) => a + b, 0);
+  const totalWeight = Object.values(controlWeights).reduce((a, b) => a + b, 0);
 
   return (
     <div className="space-y-4">
-      {/* Style Presets */}
-      <div>
-        <label className="text-sm font-medium mb-2 block">Style Presets</label>
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-          {TRANSFER_STYLES.map((style) => (
-            <label
-              key={style.name}
-              className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm transition-colors ${
-                selectedStyles.has(style.name)
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-muted-foreground"
-              }`}
-            >
-              <Checkbox
-                checked={selectedStyles.has(style.name)}
-                onCheckedChange={() => toggleStyle(style.name)}
-                disabled={useCustomPrompt}
-              />
-              {style.name}
-            </label>
-          ))}
-        </div>
+      {/* Prompt Mode Toggle */}
+      <div className="flex items-center gap-4">
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="radio"
+            name="prompt_mode"
+            checked={!useCustomPrompt}
+            onChange={() => setUseCustomPrompt(false)}
+          />
+          <span>Use Style Presets</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="radio"
+            name="prompt_mode"
+            checked={useCustomPrompt}
+            onChange={() => {
+              setUseCustomPrompt(true);
+              // Keep at least one prompt when switching to custom
+              if (prompts.length === 0) {
+                onChange({ ...config, styles: [], prompts: ["Same scene with enhanced photorealism. Maintain temporal consistency."] });
+              } else {
+                onChange({ ...config, styles: [] });
+              }
+            }}
+          />
+          <span>Custom Prompts</span>
+        </label>
       </div>
 
-      {/* Custom prompt */}
-      <label className="flex items-center gap-2 text-sm">
-        <Checkbox checked={useCustomPrompt} onCheckedChange={(c) => setUseCustomPrompt(!!c)} />
-        Use Custom Prompt
-      </label>
-
-      {useCustomPrompt && (
-        <textarea
-          value={config.custom_prompt || ""}
-          onChange={(e) => onChange({ ...config, custom_prompt: e.target.value })}
-          className="w-full h-20 px-3 py-2 bg-secondary border border-border rounded-md text-sm resize-none"
-          placeholder="Same scene during heavy snowfall..."
-        />
+      {/* Style Presets Mode */}
+      {!useCustomPrompt && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium">Style Presets</label>
+            <span className="text-xs text-muted-foreground">
+              {selectedStyles.size} selected → {selectedStyles.size} output variants
+            </span>
+          </div>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2 max-h-48 overflow-y-auto">
+            {TRANSFER_STYLES.map((style) => (
+              <label
+                key={style.name}
+                className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm transition-colors ${
+                  selectedStyles.has(style.name)
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-muted-foreground"
+                }`}
+              >
+                <Checkbox
+                  checked={selectedStyles.has(style.name)}
+                  onCheckedChange={() => toggleStyle(style.name)}
+                />
+                {style.name}
+              </label>
+            ))}
+          </div>
+        </div>
       )}
+
+      {/* Custom Prompts Mode */}
+      {useCustomPrompt && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium">Custom Prompts ({prompts.length})</label>
+            <span className="text-xs text-muted-foreground">
+              1 input → {prompts.length} output variants
+            </span>
+          </div>
+
+          {/* Prompts list */}
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {prompts.map((prompt, index) => (
+              <div key={index} className="flex items-start gap-2 p-2 bg-secondary/50 rounded-lg">
+                <span className="text-xs font-mono text-muted-foreground mt-2 w-6">
+                  {index + 1}.
+                </span>
+                <textarea
+                  value={prompt}
+                  onChange={(e) => updatePrompt(index, e.target.value)}
+                  className="flex-1 px-2 py-1.5 bg-background border border-border rounded text-sm resize-none min-h-[60px]"
+                  placeholder="Describe the style transformation..."
+                />
+                <button
+                  onClick={() => removePrompt(index)}
+                  disabled={prompts.length <= 1}
+                  className="text-destructive hover:bg-destructive/10 rounded p-1 mt-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Remove"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Add new prompt */}
+          <div className="flex gap-2">
+            <textarea
+              value={newPrompt}
+              onChange={(e) => setNewPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && e.metaKey) {
+                  e.preventDefault();
+                  addPrompt();
+                }
+              }}
+              className="flex-1 px-3 py-2 bg-secondary border border-border rounded-md text-sm resize-none h-16"
+              placeholder="Add another style prompt... (⌘+Enter to add)"
+            />
+            <Button
+              onClick={addPrompt}
+              disabled={!newPrompt.trim()}
+              className="self-end"
+            >
+              Add
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Video Settings - Yetter compatible */}
+      <div className="grid grid-cols-4 gap-4">
+        <div>
+          <label className="text-sm text-muted-foreground mb-1 block">Resolution</label>
+          <Select
+            value={config.resolution || "720"}
+            onValueChange={(v) => onChange({ ...config, resolution: v as "720" | "480" })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="720">720p</SelectItem>
+              <SelectItem value="480">480p</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-sm text-muted-foreground mb-1 block">FPS</label>
+          <Select
+            value={String(config.fps || 24)}
+            onValueChange={(v) => onChange({ ...config, fps: Number(v) as 10 | 16 | 24 })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="16">16 FPS</SelectItem>
+              <SelectItem value="24">24 FPS</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-sm text-muted-foreground mb-1 block">Max Frames</label>
+          <Select
+            value={String(config.max_frames || 121)}
+            onValueChange={(v) => onChange({ ...config, max_frames: Number(v) })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="121">121 (~{Math.round(121 / (config.fps || 24))}s)</SelectItem>
+              <SelectItem value="241">241 (~{Math.round(241 / (config.fps || 24))}s)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-sm text-muted-foreground mb-1 block">Steps</label>
+          <Select
+            value={String(config.num_steps || 35)}
+            onValueChange={(v) => onChange({ ...config, num_steps: Number(v) })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="20">20 (Fast)</SelectItem>
+              <SelectItem value="35">35 (Default)</SelectItem>
+              <SelectItem value="50">50 (Quality)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {/* Control Weights */}
       <div className="p-4 bg-secondary/50 rounded-lg">
@@ -885,16 +1208,30 @@ function TransferConfigUI({ config, onChange }: TransferConfigUIProps) {
         </div>
 
         <div className="space-y-3">
-          {(["depth", "edge", "seg", "vis"] as const).map((key) => (
+          {(["depth", "edge", "seg", "vis"] as const).map((key) => {
+            // Friendly labels for control types
+            const labels: Record<string, string> = {
+              depth: "Depth",
+              edge: "Edge",
+              seg: "Seg",
+              vis: "Vis",
+            };
+            return (
             <div key={key} className="flex items-center gap-4">
-              <div className="w-16 text-sm font-medium capitalize">{key}</div>
+              <div className="w-20 text-sm font-medium">{labels[key]}</div>
               <div className="flex-1">
                 <Slider
-                  value={[config.control_weights[key]]}
+                  value={[controlWeights[key]]}
                   onValueChange={([v]) => {
+                    const newWeights = { ...controlWeights, [key]: v };
+                    // Derive control_types from non-zero weights
+                    const control_types = (Object.entries(newWeights) as [string, number][])
+                      .filter(([, w]) => w > 0)
+                      .map(([k]) => k as "depth" | "edge" | "seg" | "vis");
                     onChange({
                       ...config,
-                      control_weights: { ...config.control_weights, [key]: v },
+                      control_weights: newWeights,
+                      control_types,
                     });
                     setSelectedPreset("");
                   }}
@@ -904,37 +1241,26 @@ function TransferConfigUI({ config, onChange }: TransferConfigUIProps) {
                 />
               </div>
               <div className="w-12 text-right text-sm font-mono">
-                {config.control_weights[key].toFixed(2)}
+                {controlWeights[key].toFixed(2)}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
       {/* Advanced */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-sm text-muted-foreground mb-2 block">
-            Guidance: {config.guidance_scale}
+            Guidance: {config.guidance}
           </label>
           <Slider
-            value={[config.guidance_scale]}
-            onValueChange={([v]) => onChange({ ...config, guidance_scale: v })}
+            value={[config.guidance]}
+            onValueChange={([v]) => onChange({ ...config, guidance: v })}
             min={1}
-            max={15}
+            max={10}
             step={0.5}
-          />
-        </div>
-        <div>
-          <label className="text-sm text-muted-foreground mb-2 block">
-            Steps: {config.num_steps}
-          </label>
-          <Slider
-            value={[config.num_steps]}
-            onValueChange={([v]) => onChange({ ...config, num_steps: v })}
-            min={10}
-            max={50}
-            step={5}
           />
         </div>
         <div>
@@ -945,6 +1271,87 @@ function TransferConfigUI({ config, onChange }: TransferConfigUIProps) {
             onChange={(e) => onChange({ ...config, seed: Number(e.target.value) })}
           />
         </div>
+      </div>
+
+      {/* Negative Prompt */}
+      <div>
+        <label className="text-sm text-muted-foreground mb-1 block">Negative Prompt</label>
+        <Input
+          value={config.negative_prompt || ""}
+          onChange={(e) => onChange({ ...config, negative_prompt: e.target.value })}
+          placeholder="Elements to avoid..."
+        />
+      </div>
+
+      {/* Advanced Options - Yetter Schema Compatible */}
+      <div className="p-4 bg-secondary/50 rounded-lg space-y-4">
+        <h4 className="text-sm font-medium">Advanced Options</h4>
+
+        {/* Context Image for Style Conditioning */}
+        <div>
+          <label className="text-sm text-muted-foreground mb-1 block">
+            Context Image URL (Style Conditioning)
+          </label>
+          <Input
+            value={config.image_context_url || ""}
+            onChange={(e) => onChange({ ...config, image_context_url: e.target.value || undefined })}
+            placeholder="Optional: URL to style reference image..."
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Image used for style conditioning in the transfer process
+          </p>
+        </div>
+
+        {/* Context Frame Index */}
+        <div>
+          <label className="text-sm text-muted-foreground mb-1 block">
+            Context Frame Index: {config.context_frame_index ?? 0}
+          </label>
+          <Slider
+            value={[config.context_frame_index ?? 0]}
+            onValueChange={([v]) => onChange({ ...config, context_frame_index: v })}
+            min={0}
+            max={30}
+            step={1}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Frame index used for style conditioning context
+          </p>
+        </div>
+
+        {/* Num Conditional Frames */}
+        <div>
+          <label className="text-sm text-muted-foreground mb-1 block">
+            Conditional Frames: {config.num_conditional_frames ?? 1}
+          </label>
+          <Slider
+            value={[config.num_conditional_frames ?? 1]}
+            onValueChange={([v]) => onChange({ ...config, num_conditional_frames: v })}
+            min={1}
+            max={5}
+            step={1}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Number of frames used for conditioning
+          </p>
+        </div>
+
+        {/* Segmentation Control Prompt - Only show when seg control is enabled */}
+        {config.control_types?.includes("seg") && (
+          <div>
+            <label className="text-sm text-muted-foreground mb-1 block">
+              Segmentation Prompt (for SAM2)
+            </label>
+            <Input
+              value={config.seg_control_prompt || ""}
+              onChange={(e) => onChange({ ...config, seg_control_prompt: e.target.value || undefined })}
+              placeholder="e.g., car . road . building . sky"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Object classes for segmentation, separated by &quot; . &quot;
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
